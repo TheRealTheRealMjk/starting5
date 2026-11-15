@@ -14,6 +14,9 @@ async function q(promise) {
 }
 
 let me = null, days = [], players = [], picked = new Set();
+let leagues = [], league = ''; // league = id shown in the standings, '' = everyone
+// Invite link ?lega=CODE: joined right after login, or passed to signUp so the server joins it at account creation.
+let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
 const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' 🔒' : ''}`;
@@ -25,20 +28,130 @@ function fillDaySelect(sel, selected) {
 }
 
 // ---------- tabs ----------
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x === b));
-  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== `tab-${b.dataset.tab}`);
-  if (b.dataset.tab === 'day') loadStandings($('#day-table'), $('#standings-day').value);
-  if (b.dataset.tab === 'total') loadStandings($('#total-table'));
-});
+let tab = 'lineup';
+function showTab(name) {
+  tab = name;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
+  document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== `tab-${name}`);
+  if (name === 'day') loadStandings($('#day-table'), $('#standings-day').value);
+  if (name === 'total') loadStandings($('#total-table'));
+}
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
 async function loadStandings(tbody, day) {
-  const rows = await q(sb.rpc('standings', day ? { p_day: Number(day) } : {}));
+  const rows = await q(sb.rpc('standings', { ...(day && { p_day: Number(day) }), ...(league && { p_league: Number(league) }) }));
   tbody.innerHTML = rows.length
     ? rows.map((r, i) => `<tr class="${r.username === me?.username ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.username)}</td><td>${r.points}</td></tr>`).join('')
     : '<tr><td colspan="3" class="empty">Nessuna formazione per ora</td></tr>';
 }
 $('#standings-day').onchange = e => loadStandings($('#day-table'), e.target.value);
+document.querySelectorAll('.standings-league').forEach(sel => sel.onchange = () => { league = sel.value; fillLeagueSelects(); showTab(tab); });
+
+// ---------- leagues ----------
+function fillLeagueSelects() {
+  if (!leagues.some(l => String(l.id) === league)) league = '';
+  document.querySelectorAll('.standings-league').forEach(sel => {
+    sel.innerHTML = `<option value="">Tutti</option>${leagues.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}`;
+    sel.value = league;
+    sel.parentElement.hidden = !leagues.length;
+  });
+}
+const leaguesMsg = t => $('#leagues-msg').textContent = t;
+
+async function loadLeagues() {
+  leagues = me ? await q(sb.rpc('my_leagues')) : [];
+  fillLeagueSelects();
+  $('#leagues-list').innerHTML = leagues.length ? leagues.map(l => `
+    <article class="card league" data-id="${l.id}">
+      <header><h3>${esc(l.name)}</h3><small>${l.members} ${l.members == 1 ? 'membro' : 'membri'} · codice <code>${esc(l.code)}</code></small></header>
+      <div class="row">
+        <button class="small" data-act="share">Invita amici</button>
+        <button class="small ghost" data-act="standings">Classifica</button>
+        ${l.is_owner ? '<button class="small ghost" data-act="rename">Rinomina</button><button class="small ghost" data-act="delete">Elimina</button>'
+                     : '<button class="small ghost" data-act="leave">Esci</button>'}
+      </div>
+      <details><summary>Membri</summary><ul class="roster"></ul></details>
+    </article>`).join('') : '<p class="hint">Non fai ancora parte di nessuna lega: creane una e invita i tuoi amici.</p>';
+}
+
+async function joinInvite() {
+  const code = invite;
+  invite = null;
+  history.replaceState(null, '', location.pathname + location.hash); // drop ?lega= so a reload doesn't retry
+  try {
+    await q(sb.rpc('join_league', { p_code: code }));
+    await loadLeagues();
+    showTab('leagues');
+    leaguesMsg(`Sei entrato nella lega «${leagues.find(l => l.code === code)?.name ?? code}».`);
+  } catch (err) { showTab('leagues'); leaguesMsg(err.message); }
+}
+
+const inviteLink = code => `${location.origin}${location.pathname}?lega=${code}`;
+async function shareLeague(l) {
+  const url = inviteLink(l.code), text = `Entra nella mia lega «${l.name}» su Starting5!`;
+  if (navigator.share) {
+    try { return await navigator.share({ title: 'Starting5', text, url }); } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); leaguesMsg('Link di invito copiato: incollalo su WhatsApp o dove vuoi.'); }
+  catch { prompt('Copia questo link e mandalo ai tuoi amici:', url); }
+}
+
+async function loadRoster(card) {
+  const l = leagues.find(x => x.id == card.dataset.id);
+  const rows = await q(sb.rpc('league_roster', { p_league: l.id }));
+  card.querySelector('.roster').innerHTML = rows.map(r => `<li><span>${esc(r.username)}</span>${r.is_owner ? '<small class="tag">creatore</small>'
+    : l.is_owner ? `<button class="small ghost" data-act="remove" data-user="${r.user_id}" data-name="${esc(r.username)}">Rimuovi</button>` : ''}</li>`).join('');
+}
+// 'toggle' doesn't bubble: listen in the capture phase
+$('#leagues-list').addEventListener('toggle', e => { if (e.target.open) loadRoster(e.target.closest('.league')).catch(err => leaguesMsg(err.message)); }, true);
+
+$('#leagues-list').onclick = async e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const card = btn.closest('.league'), l = leagues.find(x => x.id == card.dataset.id);
+  try {
+    switch (btn.dataset.act) {
+      case 'share': return await shareLeague(l);
+      case 'standings': league = String(l.id); fillLeagueSelects(); return showTab('total');
+      case 'rename': {
+        const name = prompt('Nuovo nome della lega', l.name);
+        if (!name || name.trim() === l.name) return;
+        await q(sb.rpc('rename_league', { p_league: l.id, p_name: name }));
+        break;
+      }
+      case 'delete':
+        if (!confirm(`Eliminare la lega «${l.name}»? La classifica della lega sparisce per tutti i membri (le formazioni restano).`)) return;
+        await q(sb.rpc('delete_league', { p_league: l.id }));
+        break;
+      case 'leave':
+        if (!confirm(`Uscire dalla lega «${l.name}»?`)) return;
+        await q(sb.rpc('leave_league', { p_league: l.id }));
+        break;
+      case 'remove':
+        if (!confirm(`Rimuovere ${btn.dataset.name} dalla lega «${l.name}»?`)) return;
+        await q(sb.rpc('remove_member', { p_league: l.id, p_user: btn.dataset.user }));
+        break;
+    }
+    leaguesMsg('');
+    await loadLeagues();
+  } catch (err) { leaguesMsg(err.message); }
+};
+
+$('#league-create').onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const [{ code }] = await q(sb.rpc('create_league', { p_name: e.target.elements.name.value }));
+    e.target.reset();
+    await loadLeagues();
+    leaguesMsg(`Lega creata! Codice ${code}: premi «Invita amici» per mandare il link.`);
+  } catch (err) { leaguesMsg(err.message); }
+};
+$('#league-join').onsubmit = async e => {
+  e.preventDefault();
+  invite = e.target.elements.code.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  e.target.reset();
+  await joinInvite();
+};
 
 // ---------- account ----------
 async function setUser(user) {
@@ -50,11 +163,16 @@ async function setUser(user) {
   $('#login-hint').hidden = !!me;
   $('#lineup').hidden = !me;
   $('#delete-wrap').hidden = !me;
+  $('#leagues-hint').hidden = !!me;
+  $('#leagues-box').hidden = !me;
+  $('#invite-msg').hidden = !(invite && !me);
   if (me) loadLineup();
+  await loadLeagues();
+  if (me && invite) await joinInvite();
 }
 
 $('#delete-account').onclick = async () => {
-  if (!confirm(`Eliminare definitivamente l'account "${me.username}"? Email, username e tutte le formazioni verranno cancellati. Non si può annullare.`)) return;
+  if (!confirm(`Eliminare definitivamente l'account "${me.username}"? Email, username, tutte le formazioni e le leghe che hai creato verranno cancellati. Non si può annullare.`)) return;
   try {
     await q(sb.rpc('delete_account'));
     await sb.auth.signOut({ scope: 'local' }); // the server session is already gone with the user
@@ -78,7 +196,7 @@ $('#auth').onsubmit = async e => {
       if (!/^[A-Za-z0-9_.-]{3,20}$/.test(username)) throw new Error('Username: 3-20 caratteri tra lettere, numeri, _ . -');
       const taken = await q(sb.from('profiles').select('id').ilike('username', username.replace(/[_%\\]/g, '\\$&')));
       if (taken.length) throw new Error('Username già registrato. Se ti sei appena registrato tu, conferma dal link nella mail e poi clicca Accedi.');
-      const { session } = await q(sb.auth.signUp({ email, password, options: { data: { username }, emailRedirectTo: location.href.split('#')[0] } }));
+      const { session } = await q(sb.auth.signUp({ email, password, options: { data: { username, ...(invite && { league: invite }) }, emailRedirectTo: location.href.split('#')[0] } }));
       msg.textContent = session ? '' : `Registrazione fatta! Abbiamo mandato una mail a ${email}: clicca il link per confermare, poi accedi qui. Non la trovi? Guarda nella cartella Spam e segnala «Non è spam».`;
     }
   } catch (err) {

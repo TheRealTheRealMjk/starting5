@@ -7,7 +7,7 @@
   <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="fonts.css?v=6">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <header class="topbar">
@@ -43,6 +43,7 @@
       </div>
       <form id="auth" class="card auth" hidden>
         <h2>Entra in campo</h2>
+        <p id="invite-msg" class="invite" hidden>Sei stato invitato in una lega privata: accedi o registrati per entrare.</p>
         <label>Email <input name="email" type="email" autocomplete="email" required></label>
         <label>Password <input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
         <label>Username <small>solo per registrarsi, visibile in classifica</small>
@@ -62,6 +63,7 @@
     <button data-tab="lineup" class="active">La mia formazione</button>
     <button data-tab="day">Classifica giornata</button>
     <button data-tab="total">Classifica generale</button>
+    <button data-tab="leagues">Leghe</button>
   </nav>
 
   <main>
@@ -94,12 +96,32 @@
     </section>
 
     <section id="tab-day" hidden>
-      <div class="bar"><label class="select">Giornata <select id="standings-day"></select></label></div>
+      <div class="bar"><label class="select">Giornata <select id="standings-day"></select></label><label class="select league-select" hidden>Classifica <select class="standings-league"></select></label></div>
       <table class="card standings"><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="day-table"></tbody></table>
     </section>
 
     <section id="tab-total" hidden>
+      <div class="bar"><label class="select league-select" hidden>Classifica <select class="standings-league"></select></label></div>
       <table class="card standings"><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="total-table"></tbody></table>
+    </section>
+    <section id="tab-leagues" hidden>
+      <p class="hint" id="leagues-hint">Accedi per creare una lega privata o entrare in quella dei tuoi amici.</p>
+      <div id="leagues-box" hidden>
+        <div class="league-forms">
+          <form id="league-create" class="card league-form">
+            <h3>Crea una lega</h3>
+            <label>Nome <input name="name" required minlength="3" maxlength="40" placeholder="Es. Amici del giovedì"></label>
+            <button>Crea lega</button>
+          </form>
+          <form id="league-join" class="card league-form">
+            <h3>Entra con un codice</h3>
+            <label>Codice <input name="code" required minlength="6" maxlength="6" placeholder="K7Q2MZ" autocapitalize="characters" autocomplete="off"></label>
+            <button>Entra</button>
+          </form>
+        </div>
+        <p id="leagues-msg" role="status"></p>
+        <div id="leagues-list"></div>
+      </div>
     </section>
   </main>
 
@@ -108,6 +130,6 @@
     <p><a href="privacy.html">Privacy</a><span id="delete-wrap" hidden> · <button id="delete-account" class="link">Elimina account</button></span></p>
   </footer>
   <script src="vendor/supabase.js?v=6"></script>
-  <script type="module" src="app.js?v=7"></script>
+  <script type="module" src="app.js?v=8"></script>
 </body>
 </html>

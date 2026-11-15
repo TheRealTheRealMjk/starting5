@@ -50,10 +50,47 @@ await pg.exec(`insert into matches values (12,1,now()-interval '3 days',1,2,2),(
   insert into ratings values (12,1,10,20),(13,1,30,20)`);
 assert.deepEqual(await as(A, 'select name, games, avg_val::float from top_season'), [{ name: 'P1', games: 3, avg_val: 20 }]);
 assert.equal((await as(A, 'select avg_val::float a from player_list where id = 1'))[0].a, 20);
+// leagues
+const [{ id: L, code }] = await as(A, `select * from create_league('  Amici  ')`);
+assert.match(code, /^[A-HJKMNP-Z2-9]{6}$/);
+assert.deepEqual(await as(A, 'select name, is_owner, members::int from my_leagues()'), [{ name: 'Amici', is_owner: true, members: 1 }]);
+await rejects(as(A, `select create_league('ab')`), /3 a 40/);
+await rejects(as(B, `select join_league('XXXXXX')`), /non valido/);
+// RLS (the rest of this file runs as superuser, which bypasses it): B can't see the league before joining
+await pg.exec('grant usage on schema public to authenticated; grant select on all tables in schema public to authenticated');
+const asAuth = async (uid, sql) => {
+  await pg.query(`select set_config('test.uid', $1, false)`, [uid]); await pg.exec('set role authenticated');
+  try { return (await pg.query(sql)).rows; } finally { await pg.exec('reset role'); }
+};
+assert.equal((await asAuth(B, 'select * from leagues')).length, 0);
+await as(B, `select join_league(' ${code.toLowerCase()} ')`);
+await as(B, `select join_league('${code}')`); // idempotent
+assert.equal((await asAuth(B, 'select * from leagues')).length, 1);
+assert.equal((await asAuth(B, 'select * from league_members')).length, 2);
+assert.deepEqual(await as(A, `select * from standings(null, ${L})`), await as(A, 'select * from standings()'));
+assert.deepEqual(await as('', `select * from standings(null, ${L})`), []); // non-members see nothing
+// signing up from an invite link joins the league; members without lineups show 0; a bad code never blocks sign-up
+const C = '00000000-0000-0000-0000-00000000000c';
+await pg.exec(`insert into auth.users values ('${C}', '{"username":"cleo","league":"${code}"}')`);
+assert.deepEqual((await as(A, `select username, points from standings(1, ${L})`)).at(-1), { username: 'cleo', points: 0 });
+await pg.exec(`insert into auth.users values (gen_random_uuid(), '{"username":"dino","league":"NOPE00"}')`);
+assert.deepEqual((await as(B, `select username from league_roster(${L})`)).map(r => r.username), ['anna', 'bob', 'cleo']);
+// owner powers
+await rejects(as(B, `select remove_member(${L}, '${C}')`), /Solo chi/);
+await rejects(as(A, `select leave_league(${L})`), /eliminarla/);
+await as(A, `select remove_member(${L}, '${C}')`);
+await as(A, `select rename_league(${L}, 'Amici del giovedì')`);
+assert.equal((await as(B, 'select name from my_leagues()'))[0].name, 'Amici del giovedì');
+await as(B, `select leave_league(${L})`);
+assert.deepEqual(await as(B, 'select * from my_leagues()'), []);
+await rejects(as(B, `select delete_league(${L})`), /Solo chi/);
+await as(A, `select delete_league(${L})`);
+assert.equal((await pg.query('select count(*)::int n from league_members')).rows[0].n, 0);
+
 // delete_account: anonymous refused; the user's profile and lineups disappear, others untouched
 await rejects(as('', 'select delete_account()'), /Accesso/);
 await as(B, 'select delete_account()');
-assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna']);
+assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna', 'cleo', 'dino']);
 assert.equal((await pg.query(`select count(*)::int n from lineups where user_id = '${B}'`)).rows[0].n, 0);
 assert.ok((await pg.query(`select count(*)::int n from lineups where user_id = '${A}'`)).rows[0].n > 0);
 console.log('ok');

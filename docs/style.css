@@ -213,3 +213,23 @@ button.link { background: none; border: 0; padding: 0; font: inherit; cursor: po
 .legal h2 { margin: 28px 0 6px; font-size: 22px; }
 .legal p, .legal li { line-height: 1.6; }
 .legal a, .fine a { color: var(--accent); }
+
+/* ---------- private leagues ---------- */
+.league-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+.league-form, .league { padding: 18px 20px; display: grid; gap: 12px; align-content: start; }
+.league-form h3, .league h3 { margin: 0; font: 800 22px/1.2 var(--display); text-transform: uppercase; }
+.league-form button { justify-self: start; }
+#leagues-msg { min-height: 1.5em; margin: 0 0 12px; color: var(--muted); }
+#leagues-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+#leagues-list > .hint { grid-column: 1 / -1; }
+.league header small { color: var(--muted); }
+.league code { font: 600 15px/1 ui-monospace, monospace; letter-spacing: .08em; color: var(--fg); }
+.league .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.league summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.roster { list-style: none; margin: 8px 0 0; padding: 0; }
+.roster li { display: flex; align-items: center; gap: 8px; min-height: 40px; border-top: 1px solid var(--line); }
+.roster li span { flex: 1; }
+.roster .tag { font-size: 12px; font-weight: 600; color: var(--accent); }
+.roster button { padding: 6px 12px; font-size: 13px; }
+.invite { margin: 0; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 14%, transparent); font-size: 14px; }
+@media (max-width: 760px) { .league-forms { grid-template-columns: 1fr; } }
