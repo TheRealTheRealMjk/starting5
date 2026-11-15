@@ -4,15 +4,62 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Starting5 — Fantabasket LBA</title>
+  <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>Starting5</h1>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Starting5 home">
+      <svg class="ball" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30"/><path d="M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42"/></svg>
+      <span>STARTING<b>5</b></span>
+    </a>
     <div id="account"></div>
   </header>
 
-  <nav>
+  <section class="hero">
+    <svg class="court" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <rect x="10" y="10" width="580" height="380" rx="4"/>
+      <line x1="300" y1="10" x2="300" y2="390"/>
+      <circle cx="300" cy="200" r="55"/>
+      <rect x="10" y="130" width="170" height="140"/>
+      <circle cx="180" cy="200" r="55"/>
+      <path d="M10 40h60a170 170 0 0 1 0 320h-60"/>
+      <rect x="420" y="130" width="170" height="140"/>
+      <circle cx="420" cy="200" r="55"/>
+      <path d="M590 40h-60a170 170 0 0 0 0 320h60"/>
+    </svg>
+    <div class="hero-inner">
+      <div class="hero-text">
+        <p class="eyebrow">Fantabasket · Serie A LBA</p>
+        <h1>Scegli il tuo <br><span>quintetto</span>.</h1>
+        <p class="lead">Ogni giornata 5 giocatori, nessun budget. Il tuo punteggio è la somma delle valutazioni ufficiali della Lega.</p>
+        <ul class="rules">
+          <li><b>5</b> giocatori a giornata</li>
+          <li><b>VAL</b> ufficiale Lega</li>
+          <li><b>🔒</b> blocco alla palla a due</li>
+        </ul>
+      </div>
+      <form id="auth" class="card auth" hidden>
+        <h2>Entra in campo</h2>
+        <label>Email <input name="email" type="email" autocomplete="email" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+        <label>Username <small>solo per registrarsi, visibile in classifica</small>
+          <input name="username" autocomplete="nickname" pattern="[A-Za-z0-9_.\-]{3,20}"></label>
+        <div class="row">
+          <button name="action" value="login">Accedi</button>
+          <button name="action" value="register" class="ghost">Registrati</button>
+        </div>
+        <p id="auth-msg" role="status"></p>
+      </form>
+      <svg class="hero-ball" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30"/><path d="M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42"/></svg>
+    </div>
+  </section>
+
+  <nav class="tabs" aria-label="Sezioni">
     <button data-tab="lineup" class="active">La mia formazione</button>
     <button data-tab="day">Classifica giornata</button>
     <button data-tab="total">Classifica generale</button>
@@ -20,39 +67,34 @@
 
   <main>
     <section id="tab-lineup">
-      <form id="auth" hidden>
-        <p>Accedi o registrati per schierare i tuoi 5.</p>
-        <label>Email <input name="email" type="email" autocomplete="email" required></label>
-        <label>Password <input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
-        <label>Username <small>(solo per registrarsi, visibile in classifica)</small> <input name="username" autocomplete="nickname" pattern="[A-Za-z0-9_.\-]{3,20}"></label>
-        <button name="action" value="login">Accedi</button>
-        <button name="action" value="register" class="secondary">Registrati</button>
-        <p id="auth-msg" role="status"></p>
-      </form>
-
+      <p class="hint" id="login-hint">Accedi per schierare il tuo quintetto.</p>
       <div id="lineup" hidden>
-        <label>Giornata <select id="lineup-day"></select></label>
-        <p id="lineup-status" role="status"></p>
-        <ol id="picks"></ol>
+        <div class="bar">
+          <label class="select">Giornata <select id="lineup-day"></select></label>
+          <p id="lineup-status" role="status"></p>
+        </div>
+        <ol id="picks" class="floor"></ol>
         <div id="picker">
-          <input id="search" type="search" placeholder="Cerca giocatore o squadra" aria-label="Cerca giocatore o squadra">
-          <button id="save" disabled>Salva formazione (0/5)</button>
+          <div class="bar sticky">
+            <input id="search" type="search" placeholder="Cerca giocatore o squadra" aria-label="Cerca giocatore o squadra">
+            <button id="save" disabled>Salva formazione (0/5)</button>
+          </div>
           <div id="players"></div>
         </div>
       </div>
     </section>
 
     <section id="tab-day" hidden>
-      <label>Giornata <select id="standings-day"></select></label>
-      <table><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="day-table"></tbody></table>
+      <div class="bar"><label class="select">Giornata <select id="standings-day"></select></label></div>
+      <table class="card standings"><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="day-table"></tbody></table>
     </section>
 
     <section id="tab-total" hidden>
-      <table><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="total-table"></tbody></table>
+      <table class="card standings"><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="total-table"></tbody></table>
     </section>
   </main>
 
-  <footer>Valutazioni ufficiali da legabasket.it. Formazione modificabile fino alla palla a due della prima partita della giornata.</footer>
+  <footer>Valutazioni ufficiali da legabasket.it · Formazione modificabile fino alla palla a due della prima partita della giornata.</footer>
   <script type="module" src="app.js"></script>
 </body>
 </html>

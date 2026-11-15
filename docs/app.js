@@ -35,16 +35,18 @@ async function loadStandings(tbody, day) {
   const rows = await q(sb.rpc('standings', day ? { p_day: Number(day) } : {}));
   tbody.innerHTML = rows.length
     ? rows.map((r, i) => `<tr class="${r.username === me?.username ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.username)}</td><td>${r.points}</td></tr>`).join('')
-    : '<tr><td colspan="3">Nessuna formazione</td></tr>';
+    : '<tr><td colspan="3" class="empty">Nessuna formazione per ora</td></tr>';
 }
 $('#standings-day').onchange = e => loadStandings($('#day-table'), e.target.value);
 
 // ---------- account ----------
 async function setUser(user) {
   me = user ? { id: user.id, username: (await q(sb.from('profiles').select('username').eq('id', user.id).maybeSingle()))?.username } : null;
-  $('#account').innerHTML = me ? `${esc(me.username)} <button id="logout" class="secondary">Esci</button>` : '';
+  $('#account').innerHTML = me ? `<span class="user">${esc(me.username)}</span> <button id="logout" class="ghost small">Esci</button>` : '';
   if (me) $('#logout').onclick = () => sb.auth.signOut();
+  document.body.classList.toggle('logged', !!me);
   $('#auth').hidden = !!me;
+  $('#login-hint').hidden = !!me;
   $('#lineup').hidden = !me;
   if (me) loadLineup();
 }
@@ -98,9 +100,13 @@ $('#lineup-day').onchange = loadLineup;
 
 function renderPicks(scored) {
   const list = scored ?? [...picked].map(id => players.find(p => p.id === id)).filter(Boolean);
-  $('#picks').innerHTML = list.length
-    ? list.map(p => `<li>${esc(p.name)} <small>${esc(p.team)}</small>${scored ? ` <b>${p.points ?? 0}</b>` : ''}</li>`).join('')
-    : '<li class="empty">Nessun giocatore scelto</li>';
+  $('#picks').innerHTML = [0, 1, 2, 3, 4].map(i => {
+    const p = list[i];
+    if (!p) return `<li class="slot"><span class="pos">${i + 1}</span><small>Scegli un giocatore</small></li>`;
+    return `<li class="slot filled"><span class="pos">${i + 1}</span><b>${esc(p.name)}</b><small>${esc(p.team)}</small>${scored
+      ? `<em>${p.points ?? 0}</em>`
+      : `<button class="remove" data-id="${p.id}" aria-label="Togli ${esc(p.name)}">×</button>`}</li>`;
+  }).join('');
   $('#save').disabled = picked.size !== 5;
   $('#save').textContent = `Salva formazione (${picked.size}/5)`;
 }
@@ -112,8 +118,17 @@ function renderPlayers() {
   $('#players').innerHTML = [...teams].map(([team, ps]) => `<fieldset><legend>${esc(team)}</legend>${ps.map(p => `
     <label><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}
       ${!picked.has(p.id) && picked.size >= 5 ? 'disabled' : ''}>
-      ${esc(p.number)} ${esc(p.name)} <small>${esc(p.role)}</small></label>`).join('')}</fieldset>`).join('');
+      <span class="no">${esc(p.number)}</span> <span class="nm">${esc(p.name)}</span> <small>${esc(p.role)}</small></label>`).join('')}</fieldset>`).join('');
 }
+$('#picks').onclick = e => {
+  const id = Number(e.target.closest('.remove')?.dataset.id);
+  if (!id) return;
+  picked.delete(id);
+  const box = $(`#players input[value="${id}"]`);
+  if (box) box.checked = false;
+  renderPicks();
+  document.querySelectorAll('#players input').forEach(i => i.disabled = !i.checked && picked.size >= 5);
+};
 $('#search').oninput = renderPlayers;
 $('#players').onchange = e => {
   const id = Number(e.target.value);
