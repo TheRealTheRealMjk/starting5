@@ -29,8 +29,12 @@ function matchup(team, day) {
   const m = matches.find(m => m.day === day && (teamName.get(m.home_id) === team || teamName.get(m.away_id) === team));
   if (!m) return;
   const home = teamName.get(m.home_id) === team, opp = home ? m.away_id : m.home_id;
-  return { opp: teamName.get(opp), home, oppRecord: record(opp) };
+  return { opp: teamName.get(opp), oppId: opp, home, oppRecord: record(opp) };
 }
+// shortcut: codes keyed by LBA team id (names change with sponsors); a new team falls back to its first 3 letters until added here
+const CODES = { 1750: 'VIR', 1751: 'MIL', 1752: 'TOR', 1753: 'VEN', 1760: 'REG', 1761: 'BCR', 1762: 'MAX', 1763: 'TNT', 1764: 'TVB',
+  1765: 'CTU', 1766: 'VAR', 1767: 'TRI', 1768: 'SCA', 1769: 'VER', 1771: 'UDI', 1772: 'NAP' };
+const code = id => CODES[id] ?? String(teamName.get(id) ?? '').slice(0, 3).toUpperCase();
 const lastPlayedDay = () => (days.findLast(isLocked) ?? days[0])?.day;
 
 function fillDaySelect(sel, selected) {
@@ -53,6 +57,7 @@ async function loadStandings(tbody, day) {
   tbody.innerHTML = rows.length
     ? rows.map((r, i) => `<tr class="${r.username === me?.username ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.username)}</td><td>${r.points}</td></tr>`).join('')
     : '<tr><td colspan="3" class="empty">Nessuna formazione per ora</td></tr>';
+  countUp(tbody.querySelectorAll('td:last-child'));
 }
 $('#standings-day').onchange = e => loadStandings($('#day-table'), e.target.value);
 document.querySelectorAll('.standings-league').forEach(sel => sel.onchange = () => { league = sel.value; fillLeagueSelects(); showTab(tab); });
@@ -237,16 +242,18 @@ async function loadLineup() {
     ? `Giornata bloccata. Totale: ${mine.reduce((s, p) => s + (p.points ?? 0), 0)} punti`
     : `Si blocca il ${new Date(day.starts_at).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}`;
   renderPicks(locked ? mine : null);
+  if (locked) countUp(document.querySelectorAll('#picks em'));
   renderPlayers();
 }
 $('#lineup-day').onchange = loadLineup;
 
-function renderPicks(scored) {
-  const list = scored ?? [...picked].map(id => players.find(p => p.id === id)).filter(Boolean);
+function renderPicks(scored, added) {
+  const list = scored ?? [...picked].map(id => players.find(p => p.id === id)).filter(Boolean), day = selectedDay()?.day;
+  const vs = team => { const g = matchup(team, day); return g ? `<span class="vs" title="${g.home ? 'In casa contro' : 'In trasferta a'} ${esc(g.opp)}">${g.home ? 'vs' : '@'} ${code(g.oppId)}${g.oppRecord && ` ${g.oppRecord}`}</span>` : '<span class="vs">non gioca</span>'; };
   $('#picks').innerHTML = [0, 1, 2, 3, 4].map(i => {
     const p = list[i];
     if (!p) return `<li class="slot"><span class="pos">${i + 1}</span><small>Scegli un giocatore</small></li>`;
-    return `<li class="slot filled"><span class="pos">${i + 1}</span><b>${esc(p.name)}</b><small>${esc(p.team)}</small>${scored
+    return `<li class="slot filled${p.id === added ? ' pop' : ''}"><span class="pos">${i + 1}</span><b>${esc(p.name)}</b><small>${esc(p.team)}</small>${vs(p.team)}${scored
       ? `<em>${p.points ?? 0}</em>`
       : `<button class="remove" data-id="${p.id}" aria-label="Togli ${esc(p.name)}">×</button>`}</li>`;
   }).join('');
@@ -281,7 +288,7 @@ $('#search').oninput = renderPlayers;
 $('#players').onchange = e => {
   const id = Number(e.target.value);
   e.target.checked ? picked.add(id) : picked.delete(id);
-  renderPicks();
+  renderPicks(null, e.target.checked && id);
   // update in place so focus and scroll position survive
   document.querySelectorAll('#players input').forEach(i => i.disabled = !i.checked && picked.size >= 5);
 };
@@ -331,8 +338,48 @@ function tick() {
   const parts = [[Math.floor(s / 86400), 'giorni'], [Math.floor(s / 3600) % 24, 'ore'], [Math.floor(s / 60) % 60, 'min'], [s % 60, 'sec']];
   el.classList.toggle('soon', s < 3600);
   el.setAttribute('aria-label', `Formazioni chiuse tra ${parts.map(([n, u]) => `${n} ${u}`).join(' ')}`);
-  el.innerHTML = `<p>Formazioni chiuse tra · <b>${d.day}ª giornata</b></p><dl class="digits">${parts.map(([n, u]) => `<div><dt>${u}</dt><dd>${String(n).padStart(2, '0')}</dd></div>`).join('')}</dl>`;
+  if (el.dataset.day != d.day) {
+    el.dataset.day = d.day;
+    el.innerHTML = `<p>Formazioni chiuse tra · <b>${d.day}ª giornata</b></p><dl class="digits">${parts.map(([, u]) => `<div><dt>${u}</dt><dd></dd></div>`).join('')}</dl>`;
+  }
+  // touch only the digits that changed, so each one can play its flip
+  el.querySelectorAll('dd').forEach((dd, i) => {
+    const v = String(parts[i][0]).padStart(2, '0');
+    if (dd.textContent === v) return;
+    dd.textContent = v;
+    dd.classList.remove('flip'); void dd.offsetWidth; dd.classList.add('flip');
+  });
 }
+
+// Numbers roll up from 0 when they appear.
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+function countUp(els) {
+  if (calm.matches) return;
+  els.forEach(el => {
+    const end = parseFloat(el.textContent), dec = (el.textContent.split('.')[1] ?? '').length, t0 = performance.now();
+    if (!isFinite(end)) return;
+    const step = t => {
+      const k = Math.min(1, (t - t0) / 700), e = 1 - (1 - k) ** 3;
+      el.textContent = (end * e).toFixed(dec);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+// Scrolling ribbon under the hero, like the arena LED board: next games, then the season's best.
+function fillTicker() {
+  const items = [
+    ...nextGames.map(m => `<span><b>${new Date(m.starts_at).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</b> ${esc(teamName.get(m.home_id))} – ${esc(teamName.get(m.away_id))}</span>`),
+    ...topSeason.map(r => `<span>${esc(r.name)} <b>${Number(r.avg_val).toFixed(1)}</b></span>`),
+  ];
+  if (!items.length) return;
+  const run = items.join('<i></i>') + '<i></i>';
+  $('#ticker .track').innerHTML = run + run; // two copies: the loop moves by exactly one
+  $('#ticker').hidden = false;
+}
+fillTicker();
+countUp(document.querySelectorAll('.top b'));
 tick();
 setInterval(tick, 1000);
 

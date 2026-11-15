@@ -319,3 +319,91 @@ a.button { display: inline-block; text-decoration: none; }
   .games li:nth-child(2) { border-top: 1px solid var(--line); }
   .games time { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; }
 }
+
+/* ================= v3: motion ================= */
+html, body { overflow-x: clip; } /* the tilted ticker is wider than the page; clip (not hidden) keeps the sticky top bar working */
+
+/* hero: slanted bottom edge, leaning headline, orange stripes running off the right edge */
+.hero { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 36px), 0 100%); padding-bottom: 36px; }
+.hero::after {
+  content: ''; position: absolute; top: 0; bottom: 0; right: -8%; width: 38%; pointer-events: none;
+  background: repeating-linear-gradient(115deg, transparent 0 34px, rgb(240 100 15 / .09) 34px 40px);
+  animation: stripes 18s linear infinite;
+}
+@keyframes stripes { to { background-position: 440px 0; } }
+.hero h1 { transform: skewX(-7deg); transform-origin: left bottom; }
+.hero h1 span { display: inline-block; animation: wipe .7s .25s cubic-bezier(.7, 0, .2, 1) both; }
+@keyframes wipe { from { clip-path: inset(0 100% 0 0); transform: translateX(-24px); } }
+.rules li { animation: rise .5s both; }
+.rules li:nth-child(2) { animation-delay: .1s; }
+.rules li:nth-child(3) { animation-delay: .2s; }
+
+/* LED ribbon */
+.ticker {
+  position: relative; z-index: 3; margin: -30px -20px 0; transform: rotate(-1.2deg);
+  background: var(--accent); color: var(--ink); overflow: hidden; white-space: nowrap;
+  font: 800 18px/1 var(--display); text-transform: uppercase; letter-spacing: .04em;
+}
+.track { display: inline-flex; align-items: center; padding: 11px 0; animation: ticker 60s linear infinite; }
+.ticker:hover .track { animation-play-state: paused; }
+.track span { padding: 0 6px; }
+.track b { color: var(--on-ink); background: var(--ink); padding: 2px 6px; margin: 0 2px; }
+.track i { width: 7px; height: 7px; margin: 0 18px; background: var(--ink); transform: rotate(45deg); flex: none; }
+@keyframes ticker { to { transform: translateX(-50%); } }
+.ticker + .tabs { margin-top: 12px; }
+
+/* countdown digits drop in when they change */
+.digits div { overflow: hidden; }
+.digits dd.flip { animation: flip .35s cubic-bezier(.2, .8, .2, 1); }
+@keyframes flip { from { transform: translateY(-60%); opacity: 0; } }
+.clock.soon .digits div { animation: alarm 1s steps(2) infinite; }
+@keyframes alarm { 50% { border-color: #ff3b30; } }
+
+/* tabs: underline grows out of the middle */
+.tabs button { position: relative; border-bottom-color: transparent !important; }
+.tabs button::after {
+  content: ''; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 3px; background: var(--accent);
+  transform: scaleX(0); transition: transform .25s cubic-bezier(.2, .8, .2, 1);
+}
+.tabs button:hover:not(:disabled)::after { transform: scaleX(.35); background: var(--line); }
+.tabs button.active::after { transform: scaleX(1); background: var(--accent); }
+
+/* buttons: the dark fill sweeps in from the left, slanted */
+button:not(.link):not(.remove), a.button {
+  background-image: linear-gradient(115deg, var(--fg) 50%, transparent 50%); background-size: 250% 100%; background-position: 100% 0;
+  transition: background-position .3s cubic-bezier(.2, .8, .2, 1), color .2s, border-color .2s;
+}
+button:not(.link):not(.remove):hover:not(:disabled), a.button:hover { background-color: var(--accent); background-position: 0 0; }
+button.ghost:not(.link):hover:not(:disabled) { background-color: transparent; background-image: linear-gradient(115deg, var(--fg) 50%, transparent 50%); }
+.topbar button.ghost:hover:not(:disabled), .topbar button.ghost:not(.link) { background-image: linear-gradient(115deg, var(--on-ink) 50%, transparent 50%); }
+.tabs button:not(.link), .tabs button:not(.link):hover:not(:disabled) { background-image: none; }
+
+/* list rows nudge on hover */
+.top li, .standings tbody tr td, fieldset label { transition: transform .2s, background-color .2s; }
+.top li:hover { transform: translateX(6px); }
+.top li:hover::before { color: var(--accent-text); }
+
+/* a freshly picked player slams into the slot */
+.slot.pop { animation: pop .4s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes pop { from { transform: scale(.7) rotate(-4deg); opacity: 0; } }
+
+/* cards and rows slide in as they scroll into view (browsers without scroll timelines just show them) */
+@supports (animation-timeline: view()) {
+  .card, .standings tbody tr, #players label {
+    animation: rise linear both; animation-timeline: view(); animation-range: entry 0% entry 60%;
+  }
+}
+
+@media (max-width: 760px) {
+  .hero { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 20px), 0 100%); padding-bottom: 20px; }
+  .ticker { margin-top: -18px; font-size: 16px; }
+  .hero::after { width: 60%; }
+}
+.tabs { scrollbar-width: none; }
+
+/* next opponent inside a picked slot: "vs CTU 0-8" at home, "@ TVB 6-2" away */
+.slot .vs { margin-top: 6px; padding: 3px 7px; border: 1px solid rgb(255 255 255 / .18); font: 600 14px/1 var(--display); letter-spacing: .06em; color: var(--on-ink); font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) {
+  .slot .vs { grid-column: 2; justify-self: start; margin-top: 4px; }
+  .slot .pos, .slot em { grid-row: span 3; }
+}
