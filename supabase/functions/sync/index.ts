@@ -55,7 +55,7 @@ async function syncScores() {
     const { scores } = await get(`/championships/get-championships-matches-scores-by-id?id=${id}`);
     const rows = [...(scores?.ht?.rows ?? []), ...(scores?.vt?.rows ?? [])].filter((r: any) => r.player_id);
     if (rows.length) check(await db.from('ratings').upsert(
-      rows.map((r: any) => ({ match_id: id, player_id: r.player_id, val: Number(r.val_lega) || 0 }))));
+      rows.map((r: any) => ({ match_id: id, player_id: r.player_id, val: Number(r.val_lega) || 0, min: Math.ceil((Number(r.sec) || 0) / 60) }))));
   }
   return ids.length;
 }

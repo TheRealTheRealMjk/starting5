@@ -28,6 +28,7 @@ create table public.matches (
 create index matches_day on public.matches (day);
 create table public.ratings (
   match_id int not null references public.matches, player_id int not null, val int not null,
+  min int, -- minuti giocati: chi resta in panchina non abbassa la media
   primary key (match_id, player_id));
 
 create table public.lineups (
@@ -51,9 +52,29 @@ create policy "own"  on public.lineups  for select using (user_id = auth.uid());
 
 create view public.days with (security_invoker = on) as
   select day, min(starts_at) starts_at from public.matches group by day;
+
+create view public.player_stats with (security_invoker = on) as
+  select player_id, count(*) filter (where min > 0) games,
+    round(avg(val) filter (where min > 0), 1) avg_val
+  from public.ratings group by player_id;
 create view public.player_list with (security_invoker = on) as
-  select p.id, p.name, p.role, p.number, t.name team
-  from public.players p join public.teams t on t.id = p.team_id where p.active;
+  select p.id, p.name, p.role, p.number, t.name team, s.games, s.avg_val
+  from public.players p join public.teams t on t.id = p.team_id
+  left join public.player_stats s on s.player_id = p.id where p.active;
+-- Migliori medie della stagione (almeno 3 partite giocate).
+create view public.top_season with (security_invoker = on) as
+  select p.name, t.name team, s.games, s.avg_val
+  from public.player_stats s join public.players p on p.id = s.player_id join public.teams t on t.id = p.team_id
+  where s.games >= 3 order by s.avg_val desc, p.name limit 5;
+-- Migliori valutazioni dell'ultima giornata conclusa (ultima partita iniziata da almeno 2 ore).
+create view public.top_last_day with (security_invoker = on) as
+  with d as (select day from public.matches group by day
+             having max(starts_at) <= now() - interval '2 hours' order by day desc limit 1)
+  select d.day, p.name, t.name team, r.val
+  from d join public.matches m on m.day = d.day join public.ratings r on r.match_id = m.id
+  join public.players p on p.id = r.player_id join public.teams t on t.id = p.team_id
+  order by r.val desc, p.name limit 5;
+
 
 -- ---------- logica di gioco ----------
 -- La giornata si blocca alla palla a due della sua prima partita.

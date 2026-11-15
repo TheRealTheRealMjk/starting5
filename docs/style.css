@@ -182,3 +182,24 @@ footer { max-width: 1100px; margin: 24px auto 32px; padding: 0 16px; color: var(
 }
 .standings td.empty { width: auto; text-align: center; font: 400 15px/1.5 Inter, system-ui, sans-serif; color: var(--muted); padding: 28px; }
 .slot small { align-self: center; }
+
+/* ---------- top 5 boxes + season average ---------- */
+.tops { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+.top { padding: 18px 20px; }
+.top h3 { margin: 0 0 10px; font: 800 22px/1.2 var(--display); text-transform: uppercase; }
+.top h3 small { font: 500 13px/1 Inter, system-ui, sans-serif; text-transform: none; margin-left: 6px; }
+.top ol { margin: 0; padding: 0; list-style: none; counter-reset: top; }
+.top li { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); counter-increment: top; }
+.top li:first-child { border-top: 0; }
+.top li::before { content: counter(top); width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--navy); color: #fff; font: 800 15px/1 var(--display); }
+.top li:first-child::before { background: var(--accent); }
+.top li.empty::before { content: none; }
+.top li.empty { color: var(--muted); }
+.top .nm { display: grid; line-height: 1.25; }
+.top b { font: 800 26px/1 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.avg {
+  min-width: 42px; padding: 4px 8px; border-radius: 999px; text-align: center; flex: none;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); font: 800 15px/1 var(--display);
+}
+fieldset label .nm small { margin-left: 4px; font-size: 12px; }
+@media (max-width: 760px) { .tops { grid-template-columns: 1fr; } }

@@ -22,7 +22,7 @@ await pg.exec(`
   -- day 1 is already locked, so seed it directly
   insert into lineups select '${A}', 1, unnest(array[1,2,3,4,5]);
   insert into lineups select '${B}', 1, unnest(array[3,4,5,6,7]);
-  insert into ratings values (10,1,20),(10,3,-2),(11,6,15),(20,2,99);
+  insert into ratings values (10,1,20,30),(10,3,-2,10),(10,4,0,0),(11,6,15,25),(20,2,99,40);
 `);
 const as = async (uid, sql, params) => { await pg.query(`select set_config('test.uid', $1, false)`, [uid]); return (await pg.query(sql, params)).rows; };
 const rejects = (p, re) => assert.rejects(p, re);
@@ -42,4 +42,12 @@ assert.equal((await as(A, 'select * from my_lineup(2)')).length, 5);
 assert.deepEqual(await as(A, 'select * from standings()'), [{ username: 'anna', points: 117 }, { username: 'bob', points: 13 }]);
 assert.deepEqual((await as(A, 'select matches_to_sync() id order by 1')).map(r => r.id), [11]); // 10 is >48h old and has ratings
 assert.deepEqual((await as(A, 'select day from days order by day')).map(r => r.day), [1, 2]);
+// stats: player 4 sat on the bench (0 min) so has no games; match 20 is in the future so day 1 is the last finished day
+assert.deepEqual(await as(A, 'select player_id, games, avg_val::float from player_stats where player_id in (1, 4) order by 1'),
+  [{ player_id: 1, games: 1, avg_val: 20 }, { player_id: 4, games: 0, avg_val: null }]);
+assert.deepEqual((await as(A, 'select day, name, val from top_last_day')).map(r => [r.day, r.name, r.val]), [[1, 'P1', 20], [1, 'P6', 15], [1, 'P3', -2], [1, 'P4', 0]].sort((a, b) => b[2] - a[2] || a[1].localeCompare(b[1])));
+await pg.exec(`insert into matches values (12,1,now()-interval '3 days',1,2,2),(13,1,now()-interval '4 days',1,2,2);
+  insert into ratings values (12,1,10,20),(13,1,30,20)`);
+assert.deepEqual(await as(A, 'select name, games, avg_val::float from top_season'), [{ name: 'P1', games: 3, avg_val: 20 }]);
+assert.equal((await as(A, 'select avg_val::float a from player_list where id = 1'))[0].a, 20);
 console.log('ok');
