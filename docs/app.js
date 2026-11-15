@@ -119,7 +119,7 @@ function renderPlayers() {
     <label><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}
       ${!picked.has(p.id) && picked.size >= 5 ? 'disabled' : ''}>
       <span class="no">${esc(p.number)}</span> <span class="nm">${esc(p.name)} <small>${esc(p.role)}</small></span>
-      <span class="avg" title="${p.games ? `Valutazione media in ${p.games} partite` : 'Nessuna partita giocata'}">${p.avg_val ?? '–'}</span></label>`).join('')}</fieldset>`).join('');
+      <span class="avg" title="${p.games ? `Valutazione media in ${p.games} partite` : 'Nessuna partita giocata'}">${p.avg_val == null ? '–' : Number(p.avg_val).toFixed(1)}</span></label>`).join('')}</fieldset>`).join('');
 }
 $('#picks').onclick = e => {
   const id = Number(e.target.closest('.remove')?.dataset.id);
@@ -157,7 +157,7 @@ let topSeason, topDay;
 const topList = (rows, val) => rows.length
   ? rows.map(r => `<li><span class="nm">${esc(r.name)} <small>${esc(r.team)}</small></span><b>${val(r)}</b></li>`).join('')
   : '<li class="empty">Ancora nessun dato</li>';
-$('#top-season').innerHTML = topList(topSeason, r => r.avg_val);
+$('#top-season').innerHTML = topList(topSeason, r => Number(r.avg_val).toFixed(1));
 $('#top-day').innerHTML = topList(topDay, r => r.val);
 if (topDay[0]) $('#top-day-title').textContent = `Top 5 · ${topDay[0].day}ª giornata`;
 fillDaySelect($('#lineup-day'), currentDay());
