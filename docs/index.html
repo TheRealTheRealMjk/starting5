@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Starting5 — Fantabasket LBA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Starting5</h1>
+    <div id="account"></div>
+  </header>
+
+  <nav>
+    <button data-tab="lineup" class="active">La mia formazione</button>
+    <button data-tab="day">Classifica giornata</button>
+    <button data-tab="total">Classifica generale</button>
+  </nav>
+
+  <main>
+    <section id="tab-lineup">
+      <form id="auth" hidden>
+        <p>Accedi o registrati per schierare i tuoi 5.</p>
+        <label>Email <input name="email" type="email" autocomplete="email" required></label>
+        <label>Password <input name="password" type="password" autocomplete="current-password" required minlength="8"></label>
+        <label>Username <small>(solo per registrarsi, visibile in classifica)</small> <input name="username" autocomplete="nickname" pattern="[A-Za-z0-9_.\-]{3,20}"></label>
+        <button name="action" value="login">Accedi</button>
+        <button name="action" value="register" class="secondary">Registrati</button>
+      </form>
+
+      <div id="lineup" hidden>
+        <label>Giornata <select id="lineup-day"></select></label>
+        <p id="lineup-status" role="status"></p>
+        <ol id="picks"></ol>
+        <div id="picker">
+          <input id="search" type="search" placeholder="Cerca giocatore o squadra" aria-label="Cerca giocatore o squadra">
+          <button id="save" disabled>Salva formazione (0/5)</button>
+          <div id="players"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-day" hidden>
+      <label>Giornata <select id="standings-day"></select></label>
+      <table><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="day-table"></tbody></table>
+    </section>
+
+    <section id="tab-total" hidden>
+      <table><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="total-table"></tbody></table>
+    </section>
+  </main>
+
+  <footer>Valutazioni ufficiali da legabasket.it. Formazione modificabile fino alla palla a due della prima partita della giornata.</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
