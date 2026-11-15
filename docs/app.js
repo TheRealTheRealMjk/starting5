@@ -20,7 +20,7 @@ let leagues = [], league = ''; // league = id shown in the standings, '' = every
 let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
-const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' 🔒' : ''}`;
+const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' · chiusa' : ''}`;
 const currentDay = () => (days.find(d => !isLocked(d)) ?? days.at(-1))?.day;
 // '' while the team_records view is missing (before migration-004), so nobody sees a fake 0-0
 const record = id => { if (!records) return ''; const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
@@ -319,6 +319,23 @@ if (nextGames.length) {
   $('#next-games-list').innerHTML = nextGames.map(m => `<li><time datetime="${m.starts_at}">${esc(new Date(m.starts_at).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }))}<b>${new Date(m.starts_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</b></time>${team(m.home_id)}<span class="dash">–</span>${team(m.away_id)}</li>`).join('');
   $('#next-games').hidden = false;
 }
+// Countdown to the next lock (first tip-off of the next open day), refreshed every second.
+let clockDay;
+function tick() {
+  const d = days.find(d => !isLocked(d)), el = $('#countdown');
+  if (clockDay && clockDay !== d?.day && me) loadLineup(); // a day just locked: refresh the lineup screen
+  clockDay = d?.day;
+  el.hidden = !d;
+  if (!d) return;
+  const s = Math.floor((Date.parse(d.starts_at) - Date.now()) / 1000);
+  const parts = [[Math.floor(s / 86400), 'giorni'], [Math.floor(s / 3600) % 24, 'ore'], [Math.floor(s / 60) % 60, 'min'], [s % 60, 'sec']];
+  el.classList.toggle('soon', s < 3600);
+  el.setAttribute('aria-label', `Formazioni chiuse tra ${parts.map(([n, u]) => `${n} ${u}`).join(' ')}`);
+  el.innerHTML = `<p>Formazioni chiuse tra · <b>${d.day}ª giornata</b></p><dl class="digits">${parts.map(([n, u]) => `<div><dt>${u}</dt><dd>${String(n).padStart(2, '0')}</dd></div>`).join('')}</dl>`;
+}
+tick();
+setInterval(tick, 1000);
+
 fillDaySelect($('#lineup-day'), currentDay());
 fillDaySelect($('#standings-day'), lastPlayedDay());
 // setTimeout: supabase-js advises against awaiting its calls inside this callback
