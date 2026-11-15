@@ -32,6 +32,7 @@ async function syncCalendar() {
   check(await db.from('matches').upsert(matches.map((m: any) => ({
     id: m.id, day: m.day_serial, starts_at: m.match_datetime,
     home_id: m.h_team_id, away_id: m.v_team_id, status: Number(m.game_status),
+    home_score: m.home_final_score ?? null, away_score: m.visitor_final_score ?? null,
   }))));
   return [...teams.keys()];
 }

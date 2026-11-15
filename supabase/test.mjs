@@ -93,4 +93,9 @@ await as(B, 'select delete_account()');
 assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna', 'cleo', 'dino']);
 assert.equal((await pg.query(`select count(*)::int n from lineups where user_id = '${B}'`)).rows[0].n, 0);
 assert.ok((await pg.query(`select count(*)::int n from lineups where user_id = '${A}'`)).rows[0].n > 0);
+await pg.exec(`update matches set home_score = 80, away_score = 70 where id = 10;
+  update matches set home_score = 60, away_score = 75 where id in (11, 12, 13);
+  update matches set home_score = 0, away_score = 0 where id = 20`); // 20 not played yet: ignored
+assert.deepEqual(await as(A, 'select team_id, wins::int, losses::int from team_records order by 1'),
+  [{ team_id: 1, wins: 1, losses: 3 }, { team_id: 2, wins: 3, losses: 1 }]);
 console.log('ok');

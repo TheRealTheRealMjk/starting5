@@ -16,7 +16,8 @@ create table public.players (
   role text, number text, active boolean not null default true);
 create table public.matches (
   id int primary key, day int not null, starts_at timestamptz not null,
-  home_id int, away_id int, status int);
+  home_id int, away_id int, status int, -- status 2 = finita
+  home_score int, away_score int);
 create index matches_day on public.matches (day);
 create table public.ratings (
   match_id int not null references public.matches, player_id int not null, val int not null,
@@ -58,6 +59,13 @@ create view public.top_season with (security_invoker = on) as
   select p.name, t.name team, s.games, s.avg_val
   from public.player_stats s join public.players p on p.id = s.player_id join public.teams t on t.id = p.team_id
   where s.games >= 3 order by s.avg_val desc, p.name limit 5;
+-- Record vinte-perse di ogni squadra, dalle partite finite.
+create view public.team_records with (security_invoker = on) as
+  select team_id, count(*) filter (where won) wins, count(*) filter (where not won) losses
+  from (select home_id team_id, home_score > away_score won from public.matches where status = 2
+        union all
+        select away_id, away_score > home_score from public.matches where status = 2) g
+  group by team_id;
 -- Migliori valutazioni dell'ultima giornata conclusa (ultima partita iniziata da almeno 2 ore).
 create view public.top_last_day with (security_invoker = on) as
   with d as (select day from public.matches group by day

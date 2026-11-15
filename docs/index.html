@@ -7,7 +7,7 @@
   <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="fonts.css?v=6">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <header class="topbar">
@@ -22,18 +22,19 @@
     <svg class="court" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
       <rect x="10" y="10" width="580" height="380" rx="4"/>
       <line x1="300" y1="10" x2="300" y2="390"/>
-      <circle cx="300" cy="200" r="55"/>
-      <rect x="10" y="130" width="170" height="140"/>
-      <circle cx="180" cy="200" r="55"/>
-      <path d="M10 40h60a170 170 0 0 1 0 320h-60"/>
-      <rect x="420" y="130" width="170" height="140"/>
-      <circle cx="420" cy="200" r="55"/>
-      <path d="M590 40h-60a170 170 0 0 0 0 320h60"/>
+      <!-- FIBA proportions on the 28 m length (1 m ≈ 20.7): key 5.8 m, circles r 1.8 m, three-point arc r 6.75 m -->
+      <circle cx="300" cy="200" r="37"/>
+      <rect x="10" y="150" width="120" height="100"/>
+      <circle cx="130" cy="200" r="37"/>
+      <path d="M10 63H72A140 140 0 0 1 72 337H10"/>
+      <rect x="470" y="150" width="120" height="100"/>
+      <circle cx="470" cy="200" r="37"/>
+      <path d="M590 63H528A140 140 0 0 0 528 337H590"/>
     </svg>
     <div class="hero-inner">
       <div class="hero-text">
         <p class="eyebrow">Fantabasket · Serie A LBA</p>
-        <h1>Scegli il tuo <br><span>quintetto</span>.</h1>
+        <h1>Scegli il tuo <br><span>quintetto</span></h1>
         <p class="lead">Ogni giornata 5 giocatori, nessun budget. Il tuo punteggio è la somma delle valutazioni ufficiali della Lega.</p>
         <ul class="rules">
           <li><b>5</b> giocatori a giornata</li>
@@ -61,14 +62,15 @@
   </section>
 
   <nav class="tabs" aria-label="Sezioni">
-    <button data-tab="lineup" class="active">La mia formazione</button>
+    <button data-tab="home" class="active">Home</button>
+    <button data-tab="lineup" hidden>La mia formazione</button>
     <button data-tab="day">Classifica giornata</button>
     <button data-tab="total">Classifica generale</button>
     <button data-tab="leagues">Leghe</button>
   </nav>
 
   <main>
-    <section id="tab-lineup">
+    <section id="tab-home">
       <div class="tops">
         <div class="card top">
           <h3>Top 5 stagione <small>valutazione media</small></h3>
@@ -79,7 +81,14 @@
           <ol id="top-day"></ol>
         </div>
       </div>
+      <div class="card games" id="next-games" hidden>
+        <h3 id="next-games-title">Prossima giornata</h3>
+        <ul id="next-games-list"></ul>
+      </div>
       <p class="hint" id="login-hint" hidden>Accedi per schierare il tuo quintetto.</p>
+    </section>
+
+    <section id="tab-lineup" hidden>
       <div id="lineup" hidden>
         <div class="bar">
           <label class="select">Giornata <select id="lineup-day"></select></label>
@@ -131,6 +140,6 @@
     <p><a href="come-si-gioca.html">Come si gioca</a> · <a href="privacy.html">Privacy</a><span id="delete-wrap" hidden> · <button id="delete-account" class="link">Elimina account</button></span></p>
   </footer>
   <script src="vendor/supabase.js?v=6"></script>
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=12"></script>
 </body>
 </html>

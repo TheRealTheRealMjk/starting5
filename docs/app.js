@@ -14,6 +14,7 @@ async function q(promise) {
 }
 
 let me = null, days = [], players = [], picked = new Set();
+let matches = [], teamName = new Map(), records = new Map(); // team id → name, team id → {wins, losses}
 let leagues = [], league = ''; // league = id shown in the standings, '' = everyone
 // Invite link ?lega=CODE: joined right after login, or passed to signUp so the server joins it at account creation.
 let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
@@ -21,6 +22,15 @@ let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().rep
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
 const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' 🔒' : ''}`;
 const currentDay = () => (days.find(d => !isLocked(d)) ?? days.at(-1))?.day;
+// '' while the team_records view is missing (before migration-004), so nobody sees a fake 0-0
+const record = id => { if (!records) return ''; const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
+// The match a team plays on a day: { opp: name, home: bool, oppRecord: 'W-L' } or undefined.
+function matchup(team, day) {
+  const m = matches.find(m => m.day === day && (teamName.get(m.home_id) === team || teamName.get(m.away_id) === team));
+  if (!m) return;
+  const home = teamName.get(m.home_id) === team, opp = home ? m.away_id : m.home_id;
+  return { opp: teamName.get(opp), home, oppRecord: record(opp) };
+}
 const lastPlayedDay = () => (days.findLast(isLocked) ?? days[0])?.day;
 
 function fillDaySelect(sel, selected) {
@@ -28,7 +38,7 @@ function fillDaySelect(sel, selected) {
 }
 
 // ---------- tabs ----------
-let tab = 'lineup';
+let tab = 'home';
 function showTab(name) {
   tab = name;
   document.querySelectorAll('nav button').forEach(x => x.classList.toggle('active', x.dataset.tab === name));
@@ -155,18 +165,22 @@ $('#league-join').onsubmit = async e => {
 
 // ---------- account ----------
 async function setUser(user) {
+  const justLoggedIn = user && !me; // not on token refreshes: those must not move the user off their tab
   me = user ? { id: user.id, username: (await q(sb.from('profiles').select('username').eq('id', user.id).maybeSingle()))?.username } : null;
   $('#account').innerHTML = me ? `<span class="user">${esc(me.username)}</span> <button id="logout" class="ghost small">Esci</button>` : '';
   if (me) $('#logout').onclick = () => sb.auth.signOut();
   document.body.classList.toggle('logged', !!me);
   $('#auth').hidden = !!me;
   $('#login-hint').hidden = !!me;
+  $('[data-tab="lineup"]').hidden = !me;
+  if (!me && tab === 'lineup') showTab('home');
   $('#lineup').hidden = !me;
   $('#delete-wrap').hidden = !me;
   $('#leagues-hint').hidden = !!me;
   $('#leagues-box').hidden = !me;
   $('#invite-msg').hidden = !(invite && !me);
   if (me) loadLineup();
+  if (me && justLoggedIn) showTab('lineup');
   await loadLeagues();
   if (me && invite) await joinInvite();
 }
@@ -240,15 +254,19 @@ function renderPicks(scored) {
   $('#save').textContent = `Salva formazione (${picked.size}/5)`;
 }
 
+// No search: the 50 best season averages. With a search: every matching player. Each row shows that day's opponent.
 function renderPlayers() {
-  const s = $('#search').value.trim().toLowerCase();
-  const shown = players.filter(p => !s || `${p.name} ${p.team}`.toLowerCase().includes(s));
-  const teams = Map.groupBy(shown, p => p.team);
-  $('#players').innerHTML = [...teams].map(([team, ps]) => `<fieldset><legend>${esc(team)}</legend>${ps.map(p => `
+  const s = $('#search').value.trim().toLowerCase(), day = selectedDay()?.day;
+  const shown = s ? players.filter(p => `${p.name} ${p.team}`.toLowerCase().includes(s)) : players.slice(0, 50);
+  const vs = team => {
+    const g = matchup(team, day);
+    return g ? `vs ${esc(g.opp)}${g.oppRecord && ` <b title="Record ${esc(g.opp)}: vinte-perse">${g.oppRecord}</b>`} · ${g.home ? 'in casa' : 'in trasferta'}` : 'non gioca questa giornata';
+  };
+  $('#players').innerHTML = `<fieldset><legend>${s ? `${shown.length} ${shown.length === 1 ? 'giocatore trovato' : 'giocatori trovati'}` : 'I migliori 50 per valutazione media'}</legend>${shown.map(p => `
     <label><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}
       ${!picked.has(p.id) && picked.size >= 5 ? 'disabled' : ''}>
-      <span class="no">${esc(p.number)}</span> <span class="nm">${esc(p.name)} <small>${esc(p.role)}</small></span>
-      <span class="avg" title="${p.games ? `Valutazione media in ${p.games} partite` : 'Nessuna partita giocata'}">${p.avg_val == null ? '–' : Number(p.avg_val).toFixed(1)}</span></label>`).join('')}</fieldset>`).join('');
+      <span class="nm"><span>${esc(p.name)} <small>${esc(p.role)}</small></span><span class="meta">${esc(p.team)}</span><span class="opp">${vs(p.team)}</span></span>
+      <span class="avg" title="${p.games ? `Valutazione media in ${p.games} partite` : 'Nessuna partita giocata'}">${p.avg_val == null ? '–' : Number(p.avg_val).toFixed(1)}</span></label>`).join('')}</fieldset>`;
 }
 $('#picks').onclick = e => {
   const id = Number(e.target.closest('.remove')?.dataset.id);
@@ -276,19 +294,31 @@ $('#save').onclick = async () => {
 };
 
 // ---------- boot ----------
-let topSeason, topDay;
-[days, players, topSeason, topDay] = await Promise.all([
+let topSeason, topDay, teams, recs;
+[days, players, topSeason, topDay, matches, teams, recs] = await Promise.all([
   q(sb.from('days').select('*').order('day')),
-  q(sb.from('player_list').select('*').order('team').order('avg_val', { ascending: false, nullsFirst: false }).order('name')),
+  q(sb.from('player_list').select('*').order('avg_val', { ascending: false, nullsFirst: false }).order('name')),
   q(sb.from('top_season').select('*')),
   q(sb.from('top_last_day').select('*')),
+  q(sb.from('matches').select('day, starts_at, home_id, away_id').order('starts_at')),
+  q(sb.from('teams').select('id, name')),
+  q(sb.from('team_records').select('*')).catch(() => null), // view arrives with migration-004: the page must work without it
 ]);
+teamName = new Map(teams.map(t => [t.id, t.name]));
+records = recs && new Map(recs.map(r => [r.team_id, r]));
 const topList = (rows, val) => rows.length
   ? rows.map(r => `<li><span class="nm">${esc(r.name)} <small>${esc(r.team)}</small></span><b>${val(r)}</b></li>`).join('')
   : '<li class="empty">Ancora nessun dato</li>';
 $('#top-season').innerHTML = topList(topSeason, r => Number(r.avg_val).toFixed(1));
 $('#top-day').innerHTML = topList(topDay, r => r.val);
 if (topDay[0]) $('#top-day-title').textContent = `Top 5 · ${topDay[0].day}ª giornata`;
+const nextDay = currentDay(), nextGames = matches.filter(m => m.day === nextDay);
+if (nextGames.length) {
+  $('#next-games-title').textContent = `Prossima giornata · ${nextDay}ª`;
+  const team = id => `<span class="team">${esc(teamName.get(id))} <small>${record(id)}</small></span>`;
+  $('#next-games-list').innerHTML = nextGames.map(m => `<li><time datetime="${m.starts_at}">${esc(new Date(m.starts_at).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' }))}<b>${new Date(m.starts_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</b></time>${team(m.home_id)}<span class="dash">–</span>${team(m.away_id)}</li>`).join('');
+  $('#next-games').hidden = false;
+}
 fillDaySelect($('#lineup-day'), currentDay());
 fillDaySelect($('#standings-day'), lastPlayedDay());
 // setTimeout: supabase-js advises against awaiting its calls inside this callback
