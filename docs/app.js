@@ -79,10 +79,10 @@ $('#auth').onsubmit = async e => {
       const taken = await q(sb.from('profiles').select('id').ilike('username', username.replace(/[_%\\]/g, '\\$&')));
       if (taken.length) throw new Error('Username già registrato. Se ti sei appena registrato tu, conferma dal link nella mail e poi clicca Accedi.');
       const { session } = await q(sb.auth.signUp({ email, password, options: { data: { username }, emailRedirectTo: location.href.split('#')[0] } }));
-      msg.textContent = session ? '' : `Registrazione fatta! Abbiamo mandato una mail a ${email}: clicca il link per confermare, poi accedi qui.`;
+      msg.textContent = session ? '' : `Registrazione fatta! Abbiamo mandato una mail a ${email}: clicca il link per confermare, poi accedi qui. Non la trovi? Guarda nella cartella Spam e segnala «Non è spam».`;
     }
   } catch (err) {
-    msg.textContent = /email not confirmed/i.test(err.message) ? 'Email non ancora confermata: clicca il link nella mail che ti abbiamo mandato.'
+    msg.textContent = /email not confirmed/i.test(err.message) ? 'Email non ancora confermata: clicca il link nella mail che ti abbiamo mandato (se non la trovi, guarda nella cartella Spam).'
       : /invalid login credentials/i.test(err.message) ? 'Email o password errate.'
       : /rate limit/i.test(err.message) ? 'Troppe richieste, riprova tra qualche minuto.'
       : err.message;
