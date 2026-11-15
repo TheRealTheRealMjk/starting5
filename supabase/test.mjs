@@ -50,4 +50,10 @@ await pg.exec(`insert into matches values (12,1,now()-interval '3 days',1,2,2),(
   insert into ratings values (12,1,10,20),(13,1,30,20)`);
 assert.deepEqual(await as(A, 'select name, games, avg_val::float from top_season'), [{ name: 'P1', games: 3, avg_val: 20 }]);
 assert.equal((await as(A, 'select avg_val::float a from player_list where id = 1'))[0].a, 20);
+// delete_account: anonymous refused; the user's profile and lineups disappear, others untouched
+await rejects(as('', 'select delete_account()'), /Accesso/);
+await as(B, 'select delete_account()');
+assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna']);
+assert.equal((await pg.query(`select count(*)::int n from lineups where user_id = '${B}'`)).rows[0].n, 0);
+assert.ok((await pg.query(`select count(*)::int n from lineups where user_id = '${A}'`)).rows[0].n > 0);
 console.log('ok');

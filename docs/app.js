@@ -1,4 +1,5 @@
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm';
+// supabase-js 2.118.0 self-hosted (docs/vendor/supabase.js, UMD → window.supabase): no third-party CDN sees visitors' IPs.
+const { createClient } = window.supabase;
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -48,8 +49,18 @@ async function setUser(user) {
   $('#auth').hidden = !!me;
   $('#login-hint').hidden = !!me;
   $('#lineup').hidden = !me;
+  $('#delete-wrap').hidden = !me;
   if (me) loadLineup();
 }
+
+$('#delete-account').onclick = async () => {
+  if (!confirm(`Eliminare definitivamente l'account "${me.username}"? Email, username e tutte le formazioni verranno cancellati. Non si può annullare.`)) return;
+  try {
+    await q(sb.rpc('delete_account'));
+    await sb.auth.signOut({ scope: 'local' }); // the server session is already gone with the user
+    alert('Account eliminato.');
+  } catch (err) { alert(err.message); }
+};
 
 $('#auth').onsubmit = async e => {
   e.preventDefault();

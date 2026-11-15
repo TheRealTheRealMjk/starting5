@@ -131,3 +131,13 @@ revoke execute on function public.save_lineup, public.my_lineup, public.standing
 grant execute on function public.save_lineup, public.my_lineup to authenticated;
 grant execute on function public.standings to anon, authenticated;
 grant execute on function public.matches_to_sync to service_role;
+
+-- Diritto alla cancellazione (GDPR art. 17): l'utente elimina il proprio account; profilo e formazioni vanno via in cascata.
+create function public.delete_account() returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then raise exception 'Accesso richiesto'; end if;
+  delete from auth.users where id = auth.uid();
+end $$;
+revoke execute on function public.delete_account from public, anon, authenticated;
+grant execute on function public.delete_account to authenticated;
