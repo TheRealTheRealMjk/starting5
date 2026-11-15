@@ -53,17 +53,29 @@ $('#auth').onsubmit = async e => {
   e.preventDefault();
   const f = new FormData(e.target);
   const email = f.get('email'), password = f.get('password'), username = f.get('username').trim();
+  const msg = $('#auth-msg');
+  const buttons = e.target.querySelectorAll('button');
+  buttons.forEach(b => b.disabled = true); // no double submit while waiting
+  msg.textContent = 'Attendere…';
   try {
     if (e.submitter.value === 'login') {
       await q(sb.auth.signInWithPassword({ email, password }));
+      msg.textContent = '';
     } else {
       if (!/^[A-Za-z0-9_.-]{3,20}$/.test(username)) throw new Error('Username: 3-20 caratteri tra lettere, numeri, _ . -');
       const taken = await q(sb.from('profiles').select('id').ilike('username', username.replace(/[_%\\]/g, '\\$&')));
-      if (taken.length) throw new Error('Username già in uso');
+      if (taken.length) throw new Error('Username già registrato. Se ti sei appena registrato tu, conferma dal link nella mail e poi clicca Accedi.');
       const { session } = await q(sb.auth.signUp({ email, password, options: { data: { username }, emailRedirectTo: location.href.split('#')[0] } }));
-      if (!session) alert('Ti abbiamo mandato una mail: clicca il link per confermare e poi accedi.');
+      msg.textContent = session ? '' : `Registrazione fatta! Abbiamo mandato una mail a ${email}: clicca il link per confermare, poi accedi qui.`;
     }
-  } catch (err) { alert(err.message); }
+  } catch (err) {
+    msg.textContent = /email not confirmed/i.test(err.message) ? 'Email non ancora confermata: clicca il link nella mail che ti abbiamo mandato.'
+      : /invalid login credentials/i.test(err.message) ? 'Email o password errate.'
+      : /rate limit/i.test(err.message) ? 'Troppe richieste, riprova tra qualche minuto.'
+      : err.message;
+  } finally {
+    buttons.forEach(b => b.disabled = false);
+  }
 };
 
 // ---------- lineup ----------
