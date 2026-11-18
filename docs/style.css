@@ -162,7 +162,14 @@ main { max-width: 1100px; margin: 0 auto; padding: 32px 16px 16px; }
 
 /* ---------- player picker ---------- */
 .sticky { position: sticky; top: 58px; z-index: 5; padding: 10px 0; background: var(--bg); }
-.sticky input { flex: 1; min-width: 200px; }
+.sticky input { flex: 1; min-width: 140px; }
+.sticky select { width: auto; flex: none; }
+/* budget left: a small scoreboard block, red when over */
+.budget { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; min-width: 96px; padding: 6px 12px;
+  background: var(--ink); color: var(--on-ink-muted); border-radius: var(--radius); }
+.budget small { font: 600 12px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; }
+.budget b { font: 800 30px/1 var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.budget.over b { color: #ff3b30; }
 fieldset { margin: 0; padding: 16px 0 0; border: 0; background: transparent; border-top: 4px solid var(--fg); }
 legend { float: left; width: 100%; margin-bottom: 8px; font: 800 22px/1.2 var(--display); text-transform: uppercase; }
 fieldset label {
@@ -206,6 +213,8 @@ footer { max-width: 1100px; margin: 40px auto 32px; padding: 20px 16px 0; border
   .slot b, .slot small { grid-column: 2; }
   .bar .select { min-width: 0; width: 100%; }
   .sticky { top: 52px; }
+  .sticky #save { order: -1; flex: 1; } /* phone: budget + save on top, search + filter below */
+  .sticky .budget { order: -2; }
   .brand { font-size: 22px; }
   .rules b { font-size: 32px; }
   .digits div { min-width: 0; flex: 1; }

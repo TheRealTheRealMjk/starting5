@@ -23,7 +23,7 @@ await pg.exec(`
   -- day 1 is already locked, so seed it directly
   insert into lineups select '${A}', 1, unnest(array[1,2,3,4,5]);
   insert into lineups select '${B}', 1, unnest(array[3,4,5,6,7]);
-  insert into ratings values (10,1,20,30),(10,3,-2,10),(10,4,0,0),(11,6,15,25),(20,2,99,40);
+  insert into ratings values (10,1,20,30),(10,3,-2,10),(10,4,0,0),(11,6,15,25),(20,2,79,40);
 `);
 const as = async (uid, sql, params) => { await pg.query(`select set_config('test.uid', $1, false)`, [uid]); return (await pg.query(sql, params)).rows; };
 const rejects = (p, re) => assert.rejects(p, re);
@@ -34,18 +34,19 @@ await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,99])'), /non valido/);
 await rejects(as(A, 'select save_lineup(9, array[1,2,3,4,5])'), /inesistente/);
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,5])'), /almeno 2/); // 4 guards
 await rejects(as(A, 'select save_lineup(2, array[1,5,6,7,8])'), /almeno 2/); // 4 bigs
-await as(A, 'select save_lineup(2, array[1,2,6,7,8])'); // 2+3 is fine
+await as(A, 'select save_lineup(2, array[3,4,6,7,8])'); // 2+3 is fine
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,8,9])'), /almeno 2/); // unknown role
-await as(A, 'select save_lineup(2, array[1,2,3,7,8])');
+await rejects(as(A, 'select save_lineup(2, array[1,2,3,7,8])'), /Budget/); // 20 + 79 > 80
+await as(A, 'select save_lineup(2, array[2,3,4,7,8])'); // 79: P3's negative average costs 0, not -2
 await rejects(as('', 'select save_lineup(2, array[1,2,3,4,5])'), /Accesso/);
 await rejects(pg.exec(`insert into auth.users values (gen_random_uuid(), '{"username":"ANNA"}')`), /duplicate/);
 
 assert.deepEqual(await as(A, 'select * from standings(1)'), [{ username: 'anna', points: 18 }, { username: 'bob', points: 13 }]);
 assert.equal((await as(A, 'select * from my_lineup(1)')).find(p => p.id === 1).points, 20);
-await as(A, 'select save_lineup(2, array[2,3,4,5,6])');
+await as(A, 'select save_lineup(2, array[3,4,5,6,8])');
 await as(A, 'select save_lineup(2, array[2,3,4,5,7])'); // replace, not append
 assert.equal((await as(A, 'select * from my_lineup(2)')).length, 5);
-assert.deepEqual(await as(A, 'select * from standings()'), [{ username: 'anna', points: 117 }, { username: 'bob', points: 13 }]);
+assert.deepEqual(await as(A, 'select * from standings()'), [{ username: 'anna', points: 97 }, { username: 'bob', points: 13 }]);
 assert.deepEqual((await as(A, 'select matches_to_sync() id order by 1')).map(r => r.id), [11]); // 10 is >48h old and has ratings
 assert.deepEqual((await as(A, 'select day from days order by day')).map(r => r.day), [1, 2]);
 // stats: player 4 sat on the bench (0 min) so has no games; match 20 is in the future so day 1 is the last finished day

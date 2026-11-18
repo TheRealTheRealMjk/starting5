@@ -99,6 +99,10 @@ begin
       from public.players where id = any (p_players)) then
     raise exception 'Servono almeno 2 piccoli e 2 lunghi';
   end if;
+  -- budget: ogni giocatore costa la sua media (negativa o senza partite = 0)
+  if (select sum(greatest(coalesce(s.avg_val, 0), 0)) from public.player_stats s where s.player_id = any (p_players)) > 80 then
+    raise exception 'Budget superato: hai 80 Ðan';
+  end if;
   delete from public.lineups where user_id = auth.uid() and day = p_day;
   insert into public.lineups (user_id, day, player_id) select auth.uid(), p_day, unnest(p_players);
 end $$;

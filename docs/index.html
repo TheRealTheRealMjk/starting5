@@ -7,7 +7,7 @@
   <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="fonts.css?v=6">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <header class="topbar">
@@ -37,11 +37,11 @@
           <p class="eyebrow">Fantabasket · Serie A LBA</p>
           <h1>Scegli il tuo <br><span>quintetto</span></h1>
         </div>
-        <p class="lead">Ogni giornata 5 giocatori, nessun budget. Il tuo punteggio è la somma delle valutazioni ufficiali della Lega.</p>
+        <p class="lead">Ogni giornata 5 giocatori e 80 &ETH;an da spendere: ognuno costa la sua media. Il tuo punteggio è la somma delle valutazioni ufficiali della Lega.</p>
         <ul class="rules">
           <li><b>5</b>giocatori a giornata</li>
           <li><b>VAL</b>ufficiale Lega</li>
-          <li><b>0</b>budget e aste</li>
+          <li><b>80</b>&ETH;an di budget</li>
         </ul>
         <div id="countdown" class="clock" role="timer" hidden></div>
         <p class="howto-link"><a href="come-si-gioca.html">Come si gioca →</a></p>
@@ -101,7 +101,16 @@
         <ol id="picks" class="floor"></ol>
         <div id="picker">
           <div class="bar sticky">
+            <output id="budget" class="budget" aria-live="polite"><small>&ETH;an rimasti</small><b>80.0</b></output>
             <input id="search" type="search" placeholder="Cerca giocatore o squadra" aria-label="Cerca giocatore o squadra">
+            <select id="value" aria-label="Filtra per valore">
+              <option value="-1,99999">Ogni valore</option>
+              <option value="200,99999">Oltre 20 &ETH;an</option>
+              <option value="150,200">15–20 &ETH;an</option>
+              <option value="100,150">10–15 &ETH;an</option>
+              <option value="50,100">5–10 &ETH;an</option>
+              <option value="-1,50">Fino a 5 &ETH;an</option>
+            </select>
             <button id="save" disabled>Salva formazione (0/5)</button>
           </div>
           <div id="players"></div>
@@ -144,6 +153,6 @@
     <p><a href="come-si-gioca.html">Come si gioca</a> · <a href="privacy.html">Privacy</a><span id="delete-wrap" hidden> · <button id="delete-account" class="link">Elimina account</button></span></p>
   </footer>
   <script src="vendor/supabase.js?v=6"></script>
-  <script type="module" src="app.js?v=15"></script>
+  <script type="module" src="app.js?v=16"></script>
 </body>
 </html>

@@ -233,8 +233,11 @@ const selectedDay = () => days.find(d => d.day === Number($('#lineup-day').value
 // At least 2 piccoli and 2 lunghi, as in save_lineup. Unknown role ('-'): not selectable until set in players.role.
 const slotOf = p => { const r = p?.role ?? players.find(x => x.id === p?.id)?.role; return /Play|Guardia/.test(r) ? 'P' : /Ala|Centro/.test(r) ? 'L' : null; };
 const counts = () => { const c = { P: 0, L: 0 }; picked.forEach(id => c[slotOf(players.find(p => p.id === id))]++); return c; };
-const canPick = p => { const c = counts(), s = slotOf(p); return !!s && picked.size < 5 && c[s] < 3; };
-const refreshBoxes = () => document.querySelectorAll('#players input').forEach(i => i.disabled = !i.checked && !canPick(players.find(p => p.id === Number(i.value))));
+// Budget, as in save_lineup: each player costs his season average (negative or no games = 0). Tenths as integers: no float drift.
+const BUDGET = 80, cost = p => Math.max(Math.round(Number(p?.avg_val ?? 0) * 10), 0);
+const left = () => BUDGET * 10 - [...picked].reduce((s, id) => s + cost(players.find(p => p.id === id)), 0);
+const dan = tenths => `${(tenths / 10).toFixed(1)} Ðan`;
+const canPick = p => { const c = counts(), s = slotOf(p); return !!s && picked.size < 5 && c[s] < 3 && cost(p) <= left(); };
 
 async function loadLineup() {
   const day = selectedDay();
@@ -264,42 +267,44 @@ function renderPicks(scored, added) {
       ? `<em>${p.points ?? 0}</em>`
       : `<button class="remove" data-id="${p.id}" aria-label="Togli ${esc(p.name)}">×</button>`}</li>`;
   }).join('');
-  $('#save').disabled = picked.size !== 5;
+  $('#save').disabled = picked.size !== 5 || left() < 0;
   $('#save').textContent = `Salva formazione (${picked.size}/5)`;
+  $('#budget b').textContent = (left() / 10).toFixed(1);
+  $('#budget').classList.toggle('over', left() < 0);
 }
 
-// Two columns, piccoli and lunghi. No search: the 25 best season averages of each. With a search: every matching player. Each row shows that day's opponent.
+// Two columns, piccoli and lunghi, filtered by the value range. No search: the 25 best averages each that still fit the budget. With a search: every match. Each row shows that day's opponent.
 function renderPlayers() {
   const s = $('#search').value.trim().toLowerCase(), day = selectedDay()?.day;
-  const found = s ? players.filter(p => `${p.name} ${p.team}`.toLowerCase().includes(s)) : players;
-  // without a search, the best 25 of each; roleless players are hidden
-  const cols = [['Piccoli', found.filter(p => slotOf(p) === 'P')], ['Lunghi', found.filter(p => slotOf(p) === 'L')]].map(([t, l]) => [t, s ? l : l.slice(0, 25)]);
+  const [lo, hi] = $('#value').value.split(',').map(Number); // cost range in tenths, (lo, hi]
+  const found = players.filter(p => (!s || `${p.name} ${p.team}`.toLowerCase().includes(s)) && cost(p) > lo && cost(p) <= hi);
+  // without a search, the best 25 of each among the ones you can still afford; roleless players are hidden
+  const cols = [['Piccoli', found.filter(p => slotOf(p) === 'P')], ['Lunghi', found.filter(p => slotOf(p) === 'L')]]
+    .map(([t, l]) => [t, s ? l : l.filter(p => picked.has(p.id) || cost(p) <= left()).slice(0, 25)]);
   const vs = team => {
     const g = matchup(team, day);
     return g ? `vs ${esc(g.opp)}${g.oppRecord && ` <b title="Record ${esc(g.opp)}: vinte-perse">${g.oppRecord}</b>`} · ${g.home ? 'in casa' : 'in trasferta'}` : 'non gioca questa giornata';
   };
-  $('#players').innerHTML = cols.map(([title, shown]) => `<fieldset><legend>${title} · ${s ? `${shown.length} ${shown.length === 1 ? 'trovato' : 'trovati'}` : 'i migliori 25 per media'}</legend>${shown.map(p => `
+  $('#players').innerHTML = cols.map(([title, shown]) => `<fieldset><legend>${title} · ${s ? `${shown.length} ${shown.length === 1 ? 'trovato' : 'trovati'}` : `i migliori per media entro ${dan(Math.max(left(), 0))}`}</legend>${shown.map(p => `
     <label><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}
       ${!picked.has(p.id) && !canPick(p) ? 'disabled' : ''}>
       <span class="nm"><span>${esc(p.name)} <small>${esc(p.role)}</small></span><span class="meta">${esc(p.team)}</span><span class="opp">${vs(p.team)}</span></span>
-      <span class="avg" title="${p.games ? `Valutazione media in ${p.games} partite` : 'Nessuna partita giocata'}">${p.avg_val == null ? '–' : Number(p.avg_val).toFixed(1)}</span></label>`).join('')}</fieldset>`).join('');
+      <span class="avg" title="Costo = valutazione media${p.games ? ` in ${p.games} partite` : ': nessuna partita giocata'}">${dan(cost(p))}</span></label>`).join('')}</fieldset>`).join('');
 }
 $('#picks').onclick = e => {
   const id = Number(e.target.closest('.remove')?.dataset.id);
   if (!id) return;
   picked.delete(id);
-  const box = $(`#players input[value="${id}"]`);
-  if (box) box.checked = false;
   renderPicks();
-  refreshBoxes();
+  renderPlayers();
 };
-$('#search').oninput = renderPlayers;
+$('#search').oninput = $('#value').onchange = renderPlayers;
 $('#players').onchange = e => {
   const id = Number(e.target.value);
   e.target.checked ? picked.add(id) : picked.delete(id);
   renderPicks(null, e.target.checked && id);
-  // update in place so focus and scroll position survive
-  refreshBoxes();
+  renderPlayers(); // the affordable list changes with the budget left
+  $(`#players input[value="${id}"]`)?.focus({ preventScroll: true });
 };
 
 $('#save').onclick = async () => {
