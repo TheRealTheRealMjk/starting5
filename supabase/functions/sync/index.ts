@@ -1,6 +1,6 @@
 // Edge Function "sync": importa calendario, roster e valutazioni dall'API JSON di legabasket.it.
 // Body {"full": true} = calendario + roster + valutazioni; altrimenti solo valutazioni.
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 
 // sb_secret_ keys (injected as a JSON map); legacy service_role (retired in 2027) as fallback.
 const KEY = Object.values(JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}'))[0] as string ||
