@@ -92,6 +92,13 @@ begin
   if (select count(*) from public.players where active and id = any (p_players)) <> 5 then
     raise exception 'Giocatore non valido';
   end if;
+  -- almeno 2 piccoli e 2 lunghi; chi ha ruolo '-' non è selezionabile (si corregge a mano in players.role)
+  if (select count(*) filter (where role ~ 'Play|Guardia') < 2
+          or count(*) filter (where role !~ 'Play|Guardia' and role ~ 'Ala|Centro') < 2
+          or count(*) filter (where role ~ 'Play|Guardia|Ala|Centro') <> 5
+      from public.players where id = any (p_players)) then
+    raise exception 'Servono almeno 2 piccoli e 2 lunghi';
+  end if;
   delete from public.lineups where user_id = auth.uid() and day = p_day;
   insert into public.lineups (user_id, day, player_id) select auth.uid(), p_day, unnest(p_players);
 end $$;

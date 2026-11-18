@@ -39,10 +39,14 @@ async function syncCalendar() {
 
 async function syncRosters(teamIds: number[]) {
   const rosters = await Promise.all(teamIds.map(async id => ({ id, ...(await get(`/teams/get-team-roster?id=${id}`)) })));
-  const players = rosters.flatMap((r: any) => r.players.map((p: any) => ({
-    id: p.id, team_id: r.id, name: `${p.name} ${p.surname}`,
-    role: p.player_role ?? null, number: p.player_number ?? null, active: true,
-  })));
+  // LBA gives '-' to new ids (e.g. a transfer): keep the role we already know for that id or name.
+  const known = (check(await db.from('players').select('id, name, role').neq('role', '-')) as any[]) ?? [];
+  const byId = new Map(known.map(p => [p.id, p.role])), byName = new Map(known.map(p => [p.name, p.role]));
+  const players = rosters.flatMap((r: any) => r.players.map((p: any) => {
+    const name = `${p.name} ${p.surname}`, role = p.player_role && p.player_role !== '-' ? p.player_role : null;
+    return { id: p.id, team_id: r.id, name, role: role ?? byId.get(p.id) ?? byName.get(name) ?? p.player_role ?? null,
+      number: p.player_number ?? null, active: true };
+  }));
   if (!players.length) throw new Error('Roster vuoti');
   check(await db.from('players').upsert(players));
   // Upsert first, then deactivate the rest: a failure never empties the rosters.

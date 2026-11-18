@@ -18,7 +18,8 @@ await pg.exec(`
   insert into auth.users values ('${A}', '{"username":"anna"}'), ('${B}', '{"username":"bob"}');
   insert into teams values (1,'A'),(2,'B');
   insert into matches values (10,1,now()-interval '2 days',1,2,2),(11,1,now()-interval '1 day',1,2,2),(20,2,now()+interval '3 days',1,2,0);
-  insert into players (id, team_id, name) select i, i % 2 + 1, 'P' || i from generate_series(1, 7) i;
+  insert into players (id, team_id, name, role) select i, i % 2 + 1, 'P' || i, case when i <= 4 then 'Guardia' when i <= 7 then 'Centro' else '-' end from generate_series(1, 7) i;
+  insert into players values (8, 1, 'P8', 'Ala/Centro', null, true), (9, 2, 'P9', '-', null, true);
   -- day 1 is already locked, so seed it directly
   insert into lineups select '${A}', 1, unnest(array[1,2,3,4,5]);
   insert into lineups select '${B}', 1, unnest(array[3,4,5,6,7]);
@@ -31,6 +32,11 @@ await rejects(as(A, 'select save_lineup(1, array[1,2,3,4,5])'), /bloccata/);
 await rejects(as(A, 'select save_lineup(2, array[1,1,2,3,4])'), /5 giocatori/);
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,99])'), /non valido/);
 await rejects(as(A, 'select save_lineup(9, array[1,2,3,4,5])'), /inesistente/);
+await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,5])'), /almeno 2/); // 4 guards
+await rejects(as(A, 'select save_lineup(2, array[1,5,6,7,8])'), /almeno 2/); // 4 bigs
+await as(A, 'select save_lineup(2, array[1,2,6,7,8])'); // 2+3 is fine
+await rejects(as(A, 'select save_lineup(2, array[1,2,3,8,9])'), /almeno 2/); // unknown role
+await as(A, 'select save_lineup(2, array[1,2,3,7,8])');
 await rejects(as('', 'select save_lineup(2, array[1,2,3,4,5])'), /Accesso/);
 await rejects(pg.exec(`insert into auth.users values (gen_random_uuid(), '{"username":"ANNA"}')`), /duplicate/);
 
