@@ -17,7 +17,7 @@ const A = '00000000-0000-0000-0000-00000000000a', B = '00000000-0000-0000-0000-0
 await pg.exec(`
   insert into auth.users values ('${A}', '{"username":"anna"}'), ('${B}', '{"username":"bob"}');
   insert into teams values (1,'A'),(2,'B');
-  insert into matches values (10,1,now()-interval '2 days',1,2,2),(11,1,now()-interval '1 day',1,2,2),(20,2,now()+interval '3 days',1,2,0);
+  insert into matches values (10,1,now()-interval '2 days',1,2,2),(11,1,now()-interval '1 day',1,2,2),(20,2,now()+interval '3 days',1,2,0),(21,3,now()+interval '10 days',1,2,0);
   insert into players (id, team_id, name, role) select i, i % 2 + 1, 'P' || i, case when i <= 4 then 'Guardia' when i <= 7 then 'Centro' else '-' end from generate_series(1, 7) i;
   insert into players values (8, 1, 'P8', 'Ala/Centro', null, true), (9, 2, 'P9', '-', null, true);
   -- day 1 is already locked, so seed it directly
@@ -32,6 +32,7 @@ await rejects(as(A, 'select save_lineup(1, array[1,2,3,4,5])'), /bloccata/);
 await rejects(as(A, 'select save_lineup(2, array[1,1,2,3,4])'), /5 giocatori/);
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,99])'), /non valido/);
 await rejects(as(A, 'select save_lineup(9, array[1,2,3,4,5])'), /inesistente/);
+await rejects(as(A, 'select save_lineup(3, array[3,4,6,7,8])'), /solo la prossima/); // day 2 is still open
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,5])'), /almeno 2/); // 4 guards
 await rejects(as(A, 'select save_lineup(2, array[1,5,6,7,8])'), /almeno 2/); // 4 bigs
 await as(A, 'select save_lineup(2, array[3,4,6,7,8])'); // 2+3 is fine
@@ -46,9 +47,14 @@ assert.equal((await as(A, 'select * from my_lineup(1)')).find(p => p.id === 1).p
 await as(A, 'select save_lineup(2, array[3,4,5,6,8])');
 await as(A, 'select save_lineup(2, array[2,3,4,5,7])'); // replace, not append
 assert.equal((await as(A, 'select * from my_lineup(2)')).length, 5);
+// bob saved nothing for day 2: his day-1 lineup carries over (P2's 79 on day 2 is anna's, bob has none of it)
+assert.deepEqual((await as(B, 'select id, from_day, points from my_lineup(2) order by id')).map(r => [r.id, r.from_day, r.points]),
+  [[3, 1, null], [4, 1, null], [5, 1, null], [6, 1, null], [7, 1, null]]);
+assert.deepEqual(await as(A, 'select * from standings(2)'), [{ username: 'anna', points: 79 }, { username: 'bob', points: 0 }]);
+assert.equal((await as(A, 'select from_day from my_lineup(2) limit 1'))[0].from_day, 2);
 assert.deepEqual(await as(A, 'select * from standings()'), [{ username: 'anna', points: 97 }, { username: 'bob', points: 13 }]);
 assert.deepEqual((await as(A, 'select matches_to_sync() id order by 1')).map(r => r.id), [11]); // 10 is >48h old and has ratings
-assert.deepEqual((await as(A, 'select day from days order by day')).map(r => r.day), [1, 2]);
+assert.deepEqual((await as(A, 'select day from days order by day')).map(r => r.day), [1, 2, 3]);
 // stats: player 4 sat on the bench (0 min) so has no games; match 20 is in the future so day 1 is the last finished day
 assert.deepEqual(await as(A, 'select player_id, games, avg_val::float from player_stats where player_id in (1, 4) order by 1'),
   [{ player_id: 1, games: 1, avg_val: 20 }, { player_id: 4, games: 0, avg_val: null }]);

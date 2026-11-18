@@ -86,6 +86,9 @@ begin
   select min(starts_at) into start from public.matches where day = p_day;
   if start is null then raise exception 'Giornata inesistente'; end if;
   if now() >= start then raise exception 'Giornata già iniziata: formazione bloccata'; end if;
+  if exists (select 1 from public.matches group by day having day < p_day and min(starts_at) > now()) then
+    raise exception 'Puoi schierare solo la prossima giornata';
+  end if;
   if coalesce(cardinality(p_players), 0) <> 5 or (select count(distinct x) from unnest(p_players) x) <> 5 then
     raise exception 'Servono 5 giocatori diversi';
   end if;
@@ -107,15 +110,20 @@ begin
   insert into public.lineups (user_id, day, player_id) select auth.uid(), p_day, unnest(p_players);
 end $$;
 
+-- La formazione vale anche per le giornate successive finché non ne salvi una nuova: per la giornata N conta l'ultima salvata
+-- per una giornata <= N, così come è (anche se ai prezzi di oggi sforerebbe il budget). from_day = giornata in cui è stata salvata.
 create function public.my_lineup(p_day int)
-returns table (id int, name text, team text, points bigint)
+returns table (id int, name text, team text, points bigint, from_day int)
 language sql stable set search_path = '' as $$
   select p.id, p.name, t.name,
     (select sum(r.val) from public.ratings r join public.matches m on m.id = r.match_id
-      where m.day = l.day and r.player_id = p.id)
+      where m.day = p_day and r.player_id = p.id),
+    l.day
   from public.lineups l join public.players p on p.id = l.player_id
   left join public.teams t on t.id = p.team_id
-  where l.user_id = auth.uid() and l.day = p_day order by p.name
+  where l.user_id = auth.uid()
+    and l.day = (select max(x.day) from public.lineups x where x.user_id = auth.uid() and x.day <= p_day)
+  order by p.name
 $$;
 
 -- Partite da (ri)scaricare: iniziate nelle ultime 48h, o iniziate e ancora senza valutazioni.
@@ -274,13 +282,17 @@ end $$;
 create function public.standings(p_day int default null, p_league bigint default null)
 returns table (username text, points bigint)
 language sql stable security definer set search_path = '' as $$
-  with pts as (
-    select l.user_id, coalesce(sum(r.val), 0)::bigint points
-    from public.lineups l
-    left join public.matches m on m.day = l.day
+  with src as ( -- for every user and day, the lineup in force: the last one saved for that day or an earlier one
+    select u.user_id, d.day, (select max(x.day) from public.lineups x where x.user_id = u.user_id and x.day <= d.day) src
+    from (select distinct user_id from public.lineups) u
+    cross join (select distinct day from public.matches where p_day is null or day = p_day) d),
+  pts as (
+    select s.user_id, coalesce(sum(r.val), 0)::bigint points
+    from src s
+    join public.lineups l on l.user_id = s.user_id and l.day = s.src
+    left join public.matches m on m.day = s.day
     left join public.ratings r on r.match_id = m.id and r.player_id = l.player_id
-    where p_day is null or l.day = p_day
-    group by l.user_id),
+    group by s.user_id),
   who as (
     select user_id from pts where p_league is null
     union

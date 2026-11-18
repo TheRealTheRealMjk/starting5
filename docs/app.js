@@ -38,7 +38,8 @@ const code = id => CODES[id] ?? String(teamName.get(id) ?? '').slice(0, 3).toUpp
 const lastPlayedDay = () => (days.findLast(isLocked) ?? days[0])?.day;
 
 function fillDaySelect(sel, selected) {
-  sel.innerHTML = days.map(d => `<option value="${d.day}" ${d.day === selected ? 'selected' : ''}>${esc(dayLabel(d))}</option>`).join('');
+  // only the next day can be played: later ones stay hidden
+  sel.innerHTML = days.filter(d => d.day <= currentDay()).map(d => `<option value="${d.day}" ${d.day === selected ? 'selected' : ''}>${esc(dayLabel(d))}</option>`).join('');
 }
 
 // ---------- tabs ----------
@@ -249,6 +250,8 @@ async function loadLineup() {
   $('#lineup-status').textContent = locked
     ? `Giornata bloccata. Totale: ${mine.reduce((s, p) => s + (p.points ?? 0), 0)} punti`
     : `Si blocca il ${new Date(day.starts_at).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}`;
+  const from = mine[0]?.from_day; // lineups carry over until a new one is saved
+  if (from < day.day) $('#lineup-status').textContent += ` · Vale la formazione della ${from}ª giornata${locked ? '' : ', finché non ne salvi una nuova'}`;
   renderPicks(locked ? mine : null);
   if (locked) countUp(document.querySelectorAll('#picks em'));
   renderPlayers();
@@ -344,7 +347,7 @@ if (nextGames.length) {
 let clockDay;
 function tick() {
   const d = days.find(d => !isLocked(d)), el = $('#countdown');
-  if (clockDay && clockDay !== d?.day && me) loadLineup(); // a day just locked: refresh the lineup screen
+  if (clockDay && clockDay !== d?.day) { fillDaySelect($('#lineup-day'), currentDay()); if (me) loadLineup(); } // a day just locked: the next one opens
   clockDay = d?.day;
   el.hidden = !d;
   if (!d) return;
