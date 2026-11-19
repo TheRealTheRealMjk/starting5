@@ -7,7 +7,7 @@
   <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="fonts.css?v=6">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <header class="topbar">
@@ -146,13 +146,34 @@
         <div id="leagues-list"></div>
       </div>
     </section>
+
+    <section id="tab-profile" hidden>
+      <div class="profile-grid">
+        <form id="rename" class="card profile-card">
+          <h3>La tua squadra</h3>
+          <label>Nome squadra <small>visibile in classifica</small>
+            <input name="username" required maxlength="20" pattern="[A-Za-z0-9_.\-]{3,20}" autocomplete="nickname"></label>
+          <button>Salva nome</button>
+          <p id="rename-msg" role="status"></p>
+        </form>
+        <div class="card profile-card">
+          <h3>Le tue posizioni <small>classifica generale</small></h3>
+          <ul id="my-ranks" class="ranks"></ul>
+        </div>
+      </div>
+      <div class="card profile-card">
+        <h3>Le tue giornate</h3>
+        <ol id="my-history" class="history"></ol>
+      </div>
+      <p class="danger"><button id="delete-account" class="link">Elimina account</button></p>
+    </section>
   </main>
 
   <footer>
     <p>Valutazioni ufficiali da legabasket.it · Formazione modificabile fino alla palla a due della prima partita della giornata.</p>
-    <p><a href="come-si-gioca.html">Come si gioca</a> · <a href="privacy.html">Privacy</a><span id="delete-wrap" hidden> · <button id="delete-account" class="link">Elimina account</button></span></p>
+    <p><a href="come-si-gioca.html">Come si gioca</a> · <a href="privacy.html">Privacy</a></p>
   </footer>
   <script src="vendor/supabase.js?v=6"></script>
-  <script type="module" src="app.js?v=21"></script>
+  <script type="module" src="app.js?v=22"></script>
 </body>
 </html>

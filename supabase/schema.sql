@@ -128,6 +128,27 @@ language sql stable set search_path = '' as $$
   order by p.name
 $$;
 
+-- Storico per il profilo: le giornate già iniziate, con la formazione in vigore e i punti di ogni giocatore.
+create function public.my_history()
+returns table (day int, id int, name text, team text, points bigint, from_day int)
+language sql stable set search_path = '' as $$
+  select d.day, l.id, l.name, l.team, l.points, l.from_day
+  from public.days d cross join lateral public.my_lineup(d.day) l
+  where d.starts_at <= now() order by d.day desc, l.name
+$$;
+
+-- Il nome della squadra (username) si cambia dal profilo, con le stesse regole della registrazione.
+create function public.rename_user(p_username text) returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  if auth.uid() is null then raise exception 'Accesso richiesto'; end if;
+  if coalesce(btrim(p_username), '') !~ '^[A-Za-z0-9_.-]{3,20}$' then
+    raise exception 'Nome squadra: 3-20 caratteri tra lettere, numeri, _ . -';
+  end if;
+  update public.profiles set username = btrim(p_username) where id = auth.uid();
+exception when unique_violation then raise exception 'Nome già usato da un altro giocatore';
+end $$;
+
 -- Partite da (ri)scaricare: iniziate nelle ultime 48h, o iniziate e ancora senza valutazioni.
 create function public.matches_to_sync() returns setof int
 language sql stable set search_path = '' as $$
@@ -136,8 +157,8 @@ language sql stable set search_path = '' as $$
       or not exists (select 1 from public.ratings r where r.match_id = m.id))
 $$;
 
-revoke execute on function public.save_lineup, public.my_lineup, public.matches_to_sync from public, anon, authenticated;
-grant execute on function public.save_lineup, public.my_lineup to authenticated;
+revoke execute on function public.save_lineup, public.my_lineup, public.my_history, public.rename_user, public.matches_to_sync from public, anon, authenticated;
+grant execute on function public.save_lineup, public.my_lineup, public.my_history, public.rename_user to authenticated;
 grant execute on function public.matches_to_sync to service_role;
 
 -- Diritto alla cancellazione (GDPR art. 17): l'utente elimina il proprio account; profilo e formazioni vanno via in cascata.

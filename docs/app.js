@@ -49,6 +49,7 @@ function showTab(name) {
   document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== `tab-${name}`);
   if (name === 'day') loadStandings($('#day-table'), $('#standings-day').value);
   if (name === 'total') loadStandings($('#total-table'));
+  if (name === 'profile') { $('#rename-msg').textContent = ''; loadProfile().catch(err => $('#rename-msg').textContent = err.message); }
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -174,15 +175,14 @@ async function setUser(user) {
   if (me && user?.id === me.id) return;
   const justLoggedIn = user && !me;
   me = user ? { id: user.id, username: (await q(sb.from('profiles').select('username').eq('id', user.id).maybeSingle()))?.username } : null;
-  $('#account').innerHTML = me ? `<span class="user">${esc(me.username)}</span> <button id="logout" class="ghost small">Esci</button>` : '';
-  if (me) $('#logout').onclick = () => sb.auth.signOut();
+  $('#account').innerHTML = me ? `<button id="user-btn" class="user" aria-expanded="false" aria-controls="user-menu">${esc(me.username)}</button>
+    <div id="user-menu" class="user-menu" hidden><button data-act="profile">Profilo</button><button data-act="logout">Esci</button></div>` : '';
   document.body.classList.toggle('logged', !!me);
   $('#auth').hidden = !!me;
   $('#login-hint').hidden = !!me;
   $('[data-tab="lineup"]').hidden = !me;
-  if (!me && tab === 'lineup') showTab('home');
+  if (!me && (tab === 'lineup' || tab === 'profile')) showTab('home');
   $('#lineup').hidden = !me;
-  $('#delete-wrap').hidden = !me;
   $('#leagues-hint').hidden = !!me;
   $('#leagues-box').hidden = !me;
   $('#invite-msg').hidden = !(invite && !me);
@@ -191,6 +191,48 @@ async function setUser(user) {
   await loadLeagues();
   if (me && invite) await joinInvite();
 }
+
+// ---------- user menu + profile ----------
+const userMenu = open => { $('#user-btn')?.setAttribute('aria-expanded', open); const m = $('#user-menu'); if (m) m.hidden = !open; };
+$('#account').onclick = e => {
+  if (e.target.closest('#user-btn')) return userMenu($('#user-menu').hidden);
+  const act = e.target.closest('[data-act]')?.dataset.act;
+  userMenu(false);
+  if (act === 'profile') showTab('profile');
+  if (act === 'logout') sb.auth.signOut();
+};
+document.addEventListener('click', e => { if (!e.target.closest('#account')) userMenu(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#user-menu')?.hidden === false) { userMenu(false); $('#user-btn').focus(); } });
+
+async function loadProfile() {
+  $('#rename').elements.username.value = me.username;
+  // position = row index, as in the standings tables; 'Tutti' first, then each league
+  const boards = [{ name: 'Tutti' }, ...leagues];
+  const [history, ...tables] = await Promise.all([q(sb.rpc('my_history')),
+    ...boards.map(l => q(sb.rpc('standings', l.id ? { p_league: l.id } : {})))]);
+  $('#my-ranks').innerHTML = boards.map((l, i) => {
+    const pos = tables[i].findIndex(r => r.username === me.username), row = tables[i][pos];
+    return `<li><span>${esc(l.name)}</span>${row ? `<small>su ${tables[i].length} · ${row.points} punti</small><b>${pos + 1}ª</b>` : '<small>non ancora in classifica</small><b>—</b>'}</li>`;
+  }).join('');
+  const days = new Map(); // day → its rows (already ordered by day desc)
+  history.forEach(r => days.set(r.day, [...(days.get(r.day) ?? []), r]));
+  $('#my-history').innerHTML = days.size ? [...days].map(([day, rows]) => `<li>
+    <header><b>${day}ª giornata</b>${rows[0].from_day < day ? `<small>formazione della ${rows[0].from_day}ª</small>` : ''}<em>${rows.reduce((s, r) => s + Number(r.points ?? 0), 0)}</em></header>
+    <p>${rows.map(r => `<span>${esc(r.name)} <b>${r.points ?? 0}</b></span>`).join('')}</p></li>`).join('')
+    : '<li class="empty">Nessuna giornata giocata finora.</li>';
+}
+
+$('#rename').onsubmit = async e => {
+  e.preventDefault();
+  const name = e.target.elements.username.value.trim(), msg = $('#rename-msg');
+  if (name === me.username) return msg.textContent = '';
+  try {
+    await q(sb.rpc('rename_user', { p_username: name }));
+    me.username = name;
+    $('#user-btn').textContent = name;
+    msg.textContent = 'Nome aggiornato ✔';
+  } catch (err) { msg.textContent = err.message; }
+};
 
 $('#delete-account').onclick = async () => {
   if (!confirm(`Eliminare definitivamente l'account "${me.username}"? Email, username, tutte le formazioni e le leghe che hai creato verranno cancellati. Non si può annullare.`)) return;

@@ -106,6 +106,14 @@ await as(B, 'select delete_account()');
 assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna', 'cleo', 'dino']);
 assert.equal((await pg.query(`select count(*)::int n from lineups where user_id = '${B}'`)).rows[0].n, 0);
 assert.ok((await pg.query(`select count(*)::int n from lineups where user_id = '${A}'`)).rows[0].n > 0);
+// profile: history of started days only (day 1), team rename with the sign-up rules
+assert.deepEqual(await as(A, 'select day, from_day, count(*)::int n, sum(points)::int pts from my_history() group by 1, 2'),
+  [{ day: 1, from_day: 1, n: 5, pts: 58 }]); // P1 20+10+30, P3 -2, P4 0
+await rejects(as(A, `select rename_user('x')`), /3-20/);
+await rejects(as(A, `select rename_user('CLEO')`), /già usato/);
+await rejects(as('', `select rename_user('nessuno')`), /Accesso/);
+await as(A, `select rename_user(' anna2 ')`);
+assert.deepEqual((await as(A, 'select username from profiles order by 1')).map(r => r.username), ['anna2', 'cleo', 'dino']);
 await pg.exec(`update matches set home_score = 80, away_score = 70 where id = 10;
   update matches set home_score = 60, away_score = 75 where id in (11, 12, 13);
   update matches set home_score = 0, away_score = 0 where id = 20`); // 20 not played yet: ignored
