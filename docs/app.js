@@ -171,7 +171,9 @@ $('#league-join').onsubmit = async e => {
 
 // ---------- account ----------
 async function setUser(user) {
-  const justLoggedIn = user && !me; // not on token refreshes: those must not move the user off their tab
+  // same user again (token refresh, tab back in view): reloading would wipe unsaved picks
+  if (me && user?.id === me.id) return;
+  const justLoggedIn = user && !me;
   me = user ? { id: user.id, username: (await q(sb.from('profiles').select('username').eq('id', user.id).maybeSingle()))?.username } : null;
   $('#account').innerHTML = me ? `<span class="user">${esc(me.username)}</span> <button id="logout" class="ghost small">Esci</button>` : '';
   if (me) $('#logout').onclick = () => sb.auth.signOut();
@@ -278,6 +280,10 @@ function renderPicks(scored, added) {
 
 // Two columns, piccoli and lunghi, filtered by the value range. No search: the 25 best averages each that still fit the budget. With a search: every match. Each row shows that day's opponent.
 function renderPlayers() {
+  // a full five can't take anyone else: no lists, just how to change it
+  const full = picked.size === 5;
+  $('#search').hidden = $('#value').hidden = full;
+  if (full) return $('#players').innerHTML = `<p class="hint">${left() < 0 ? 'Sei oltre il budget' : 'Quintetto completo'}: per cambiare un giocatore toglilo con × qui sopra.</p>`;
   const s = $('#search').value.trim().toLowerCase(), day = selectedDay()?.day;
   const [lo, hi] = $('#value').value.split(',').map(Number); // cost range in tenths, (lo, hi]
   const found = players.filter(p => (!s || `${p.name} ${p.team}`.toLowerCase().includes(s)) && cost(p) > lo && cost(p) <= hi);
@@ -311,10 +317,12 @@ $('#players').onchange = e => {
 };
 
 $('#save').onclick = async () => {
+  $('#save').disabled = true; // no double tap while waiting
   try {
     await q(sb.rpc('save_lineup', { p_day: selectedDay().day, p_players: [...picked] }));
     $('#lineup-status').textContent = 'Formazione salvata ✔';
   } catch (err) { alert(err.message); }
+  finally { renderPicks(); }
 };
 
 // ---------- boot ----------

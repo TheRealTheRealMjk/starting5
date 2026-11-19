@@ -106,6 +106,8 @@ begin
   if (select sum(greatest(coalesce(s.avg_val, 0), 0)) from public.player_stats s where s.player_id = any (p_players)) > 80 then
     raise exception 'Budget superato: hai 80 Ðan';
   end if;
+  -- one save per user at a time: two parallel saves would both delete nothing and leave 10 players
+  perform 1 from public.profiles where id = auth.uid() for update;
   delete from public.lineups where user_id = auth.uid() and day = p_day;
   insert into public.lineups (user_id, day, player_id) select auth.uid(), p_day, unnest(p_players);
 end $$;
