@@ -56,12 +56,16 @@ async function syncRosters(teamIds: number[]) {
 
 async function syncScores() {
   const ids = (check(await db.rpc('matches_to_sync')) as any[]).map(x => typeof x === 'object' ? Object.values(x)[0] : x);
+  const failed: string[] = [];
   for (const id of ids) {
-    const { scores } = await get(`/championships/get-championships-matches-scores-by-id?id=${id}`);
-    const rows = [...(scores?.ht?.rows ?? []), ...(scores?.vt?.rows ?? [])].filter((r: any) => r.player_id);
-    if (rows.length) check(await db.from('ratings').upsert(
-      rows.map((r: any) => ({ match_id: id, player_id: r.player_id, val: Number(r.val_lega) || 0, min: Math.ceil((Number(r.sec) || 0) / 60) }))));
+    try { // one broken match (e.g. a permanent 404) must not stop the others
+      const { scores } = await get(`/championships/get-championships-matches-scores-by-id?id=${id}`);
+      const rows = [...(scores?.ht?.rows ?? []), ...(scores?.vt?.rows ?? [])].filter((r: any) => r.player_id);
+      if (rows.length) check(await db.from('ratings').upsert(
+        rows.map((r: any) => ({ match_id: id, player_id: r.player_id, val: Number(r.val_lega) || 0, min: Math.ceil((Number(r.sec) || 0) / 60) }))));
+    } catch (e) { failed.push(`${id}: ${e}`); }
   }
+  if (failed.length) throw new Error(`Partite non importate: ${failed.join('; ')}`); // still a 500 in the logs
   return ids.length;
 }
 

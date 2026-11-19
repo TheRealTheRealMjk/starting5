@@ -327,6 +327,7 @@ $('#save').onclick = async () => {
 
 // ---------- boot ----------
 let topSeason, topDay, teams, recs;
+try {
 [days, players, topSeason, topDay, matches, teams, recs] = await Promise.all([
   q(sb.from('days').select('*').order('day')),
   q(sb.from('player_list').select('*').order('avg_val', { ascending: false, nullsFirst: false }).order('name')),
@@ -336,6 +337,10 @@ let topSeason, topDay, teams, recs;
   q(sb.from('teams').select('id, name')),
   q(sb.from('team_records').select('*')).catch(() => null), // view arrives with migration-004: the page must work without it
 ]);
+} catch (err) { // e.g. the free-plan project is paused: say so instead of leaving empty sections
+  $('main').innerHTML = '<p class="hint">Il servizio non risponde in questo momento. Riprova tra qualche minuto.</p>';
+  throw err;
+}
 teamName = new Map(teams.map(t => [t.id, t.name]));
 records = recs && new Map(recs.map(r => [r.team_id, r]));
 const topList = (rows, val) => rows.length
