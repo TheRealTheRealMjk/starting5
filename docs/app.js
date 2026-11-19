@@ -22,8 +22,7 @@ let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().rep
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
 const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' · chiusa' : ''}`;
 const currentDay = () => (days.find(d => !isLocked(d)) ?? days.at(-1))?.day;
-// '' while the team_records view is missing (before migration-004), so nobody sees a fake 0-0
-const record = id => { if (!records) return ''; const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
+const record = id => { const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
 // The match a team plays on a day: { opp: name, home: bool, oppRecord: 'W-L' } or undefined.
 function matchup(team, day) {
   const m = matches.find(m => m.day === day && (teamName.get(m.home_id) === team || teamName.get(m.away_id) === team));
@@ -335,14 +334,14 @@ try {
   q(sb.from('top_last_day').select('*')),
   q(sb.from('matches').select('day, starts_at, home_id, away_id').order('starts_at')),
   q(sb.from('teams').select('id, name')),
-  q(sb.from('team_records').select('*')).catch(() => null), // view arrives with migration-004: the page must work without it
+  q(sb.from('team_records').select('*')),
 ]);
 } catch (err) { // e.g. the free-plan project is paused: say so instead of leaving empty sections
   $('main').innerHTML = '<p class="hint">Il servizio non risponde in questo momento. Riprova tra qualche minuto.</p>';
   throw err;
 }
 teamName = new Map(teams.map(t => [t.id, t.name]));
-records = recs && new Map(recs.map(r => [r.team_id, r]));
+records = new Map(recs.map(r => [r.team_id, r]));
 const topList = (rows, val) => rows.length
   ? rows.map(r => `<li><span class="nm">${esc(r.name)} <small>${esc(r.team)}</small></span><b>${val(r)}</b></li>`).join('')
   : '<li class="empty">Ancora nessun dato</li>';
