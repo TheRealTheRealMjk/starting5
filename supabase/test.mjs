@@ -48,6 +48,10 @@ await rejects(pg.exec(`insert into auth.users values (gen_random_uuid(), '{"user
 
 assert.deepEqual(await as(A, 'select * from standings(1)'), [{ username: 'anna', points: 18 }, { username: 'bob', points: 13 }]);
 assert.equal((await as(A, 'select * from my_lineup(1)')).find(p => p.id === 1).points, 20);
+// others' lineups: anyone sees them once the day has started (day 1), nobody before (day 2, saved above)
+assert.deepEqual((await as('', `select name, points::int from day_lineup(1, 'anna')`)).map(r => [r.name, r.points]),
+  [['P1', 20], ['P4', 0], ['P3', -2], ['P2', null], ['P5', null]]);
+assert.deepEqual(await as(B, `select * from day_lineup(2, 'anna')`), []);
 await as(A, 'select save_lineup(2, array[3,4,5,6,8])');
 await as(A, 'select save_lineup(2, array[2,3,4,5,7])'); // replace, not append
 assert.equal((await as(A, 'select * from my_lineup(2)')).length, 5);

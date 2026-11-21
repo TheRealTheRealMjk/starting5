@@ -140,6 +140,22 @@ language sql stable set search_path = '' as $$
 $$;
 
 -- Il nome della squadra (username) si cambia dal profilo, con le stesse regole della registrazione.
+-- Quintetto di un altro giocatore in una giornata: visibile a tutti solo da quando la giornata è iniziata.
+create function public.day_lineup(p_day int, p_username text)
+returns table (name text, team text, points bigint)
+language sql stable security definer set search_path = '' as $$
+  select p.name, t.name,
+    (select sum(r.val) from public.ratings r join public.matches m on m.id = r.match_id
+      where m.day = p_day and r.player_id = p.id)
+  from public.profiles u
+  join public.lineups l on l.user_id = u.id
+    and l.day = (select max(x.day) from public.lineups x where x.user_id = u.id and x.day <= p_day)
+  join public.players p on p.id = l.player_id
+  left join public.teams t on t.id = p.team_id
+  where u.username = p_username
+    and (select min(starts_at) from public.matches where day = p_day) <= now()
+  order by 3 desc nulls last, 1
+$$;
 create function public.rename_user(p_username text) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
@@ -347,7 +363,7 @@ revoke execute on function public.add_member, public.owned, public.join_league, 
   public.delete_league, public.standings from public, anon, authenticated;
 grant execute on function public.join_league, public.create_league, public.my_leagues, public.league_roster,
   public.leave_league, public.rename_league, public.remove_member, public.delete_league to authenticated;
-grant execute on function public.standings to anon, authenticated;
+grant execute on function public.standings, public.day_lineup to anon, authenticated;
 grant execute on function public.is_member to anon, authenticated; -- needed by the RLS policies; reveals only your own membership
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();

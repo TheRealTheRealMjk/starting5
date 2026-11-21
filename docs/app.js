@@ -59,12 +59,24 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b
 
 async function loadStandings(tbody, day) {
   const rows = await q(sb.rpc('standings', { ...(day && { p_day: Number(day) }), ...(league && { p_league: Number(league) }) }));
+  const started = day && isLocked(days.find(d => d.day === Number(day))); // lineups are public once the day starts
+  const who = u => started ? `<details name="five" data-user="${esc(u)}"><summary>${esc(u)}</summary><ul class="five"></ul></details>` : esc(u);
   tbody.innerHTML = rows.length
-    ? rows.map((r, i) => `<tr class="${r.username === me?.username ? 'me' : ''}"><td>${i + 1}</td><td>${esc(r.username)}</td><td>${r.points}</td></tr>`).join('')
+    ? rows.map((r, i) => `<tr class="${r.username === me?.username ? 'me' : ''}"><td>${i + 1}</td><td>${who(r.username)}</td><td>${r.points}</td></tr>`).join('')
     : '<tr><td colspan="3" class="empty">Nessuna formazione per ora</td></tr>';
   countUp(tbody.querySelectorAll('td:last-child'));
 }
 $('#standings-day').onchange = e => loadStandings($('#day-table'), e.target.value);
+// Opening a player's name loads their five for the selected day (once).
+$('#day-table').addEventListener('toggle', async e => {
+  const ul = e.target.querySelector?.('.five');
+  if (!e.target.open || !ul || ul.childElementCount) return;
+  try {
+    const rows = await q(sb.rpc('day_lineup', { p_day: Number($('#standings-day').value), p_username: e.target.dataset.user }));
+    ul.innerHTML = rows.length ? rows.map(r => `<li><span>${esc(r.name)}<small>${esc(r.team ?? '')}</small></span><b>${r.points ?? '–'}</b></li>`).join('')
+      : '<li class="empty">Nessuna formazione</li>';
+  } catch (err) { ul.innerHTML = `<li class="empty">${esc(err.message)}</li>`; }
+}, true);
 document.querySelectorAll('.standings-league').forEach(sel => sel.onchange = () => { league = sel.value; fillLeagueSelects(); showTab(tab); });
 
 // ---------- leagues ----------

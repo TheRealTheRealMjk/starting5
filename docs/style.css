@@ -458,3 +458,16 @@ button.ghost:not(.link):hover:not(:disabled) { background-color: transparent; ba
 .history p b { color: var(--fg); font-variant-numeric: tabular-nums; }
 .danger { margin: 32px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
 @media (max-width: 760px) { .profile-grid { grid-template-columns: 1fr; } }
+
+/* ---------- day standings: a player's five, opened from his name ---------- */
+.standings summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 8px; }
+.standings summary::-webkit-details-marker { display: none; }
+.standings summary::after { content: ''; width: 6px; height: 6px; border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg) translateY(-2px); transition: transform .2s; }
+.standings details[open] summary::after { transform: rotate(225deg) translateY(-2px); }
+.standings summary:hover { color: var(--accent); }
+.standings tr:has(details[open]) td { vertical-align: top; } /* rank and total stay next to the name */
+.five { list-style: none; margin: 10px 0 2px; padding: 0; border-left: 2px solid var(--accent); }
+.five li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 0 5px 12px; font-weight: 400; }
+.five small { display: block; font-size: 12px; color: var(--muted); }
+.five b { font: 800 16px/1 var(--display); font-variant-numeric: tabular-nums; }
+.five .empty { color: var(--muted); font-size: 14px; }
