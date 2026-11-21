@@ -20,10 +20,12 @@ let leagues = [], league = ''; // league = id shown in the standings, '' = every
 let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
 
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
-const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' · chiusa' : ''}`;
+const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${d === inProgress() ? ' · in corso' : isLocked(d) ? ' · chiusa' : ''}`;
 // A started day that is not over yet: the next lineup opens only when it ends (as in save_lineup).
 const inProgress = () => days.find(d => isLocked(d) && Date.parse(d.ends_at) > Date.now());
 const currentDay = () => (days.find(d => !isLocked(d)) ?? days.at(-1))?.day;
+// The last day to show: the one being played, else the next to pick (as in save_lineup).
+const lineupDay = () => inProgress()?.day ?? currentDay();
 const record = id => { const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
 // The match a team plays on a day: { opp: name, home: bool, oppRecord: 'W-L' } or undefined.
 function matchup(team, day) {
@@ -39,8 +41,8 @@ const code = id => CODES[id] ?? String(teamName.get(id) ?? '').slice(0, 3).toUpp
 const lastPlayedDay = () => (days.findLast(isLocked) ?? days[0])?.day;
 
 function fillDaySelect(sel, selected) {
-  // only the next day can be played: later ones stay hidden
-  sel.innerHTML = days.filter(d => d.day <= currentDay()).map(d => `<option value="${d.day}" ${d.day === selected ? 'selected' : ''}>${esc(dayLabel(d))}</option>`).join('');
+  // only the next day can be played, once the previous one is over: later ones stay hidden
+  sel.innerHTML = days.filter(d => d.day <= lineupDay()).map(d => `<option value="${d.day}" ${d.day === selected ? 'selected' : ''}>${esc(dayLabel(d))}</option>`).join('');
 }
 
 // ---------- tabs ----------
@@ -289,13 +291,11 @@ async function loadLineup() {
   const day = selectedDay();
   if (!day) return;
   const mine = await q(sb.rpc('my_lineup', { p_day: day.day }));
-  const locked = isLocked(day), wait = !locked && inProgress();
+  const locked = isLocked(day);
   picked = new Set(mine.map(p => p.id));
-  $('#picker').hidden = locked || !!wait;
-  $('#picks').classList.toggle('readonly', !!wait);
+  $('#picker').hidden = locked;
   $('#lineup-status').textContent = locked
     ? `Giornata bloccata. Totale: ${mine.reduce((s, p) => s + (p.points ?? 0), 0)} punti`
-    : wait ? `Potrai schierare il quintetto quando finisce la ${wait.day}ª giornata`
     : `Si blocca il ${new Date(day.starts_at).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}`;
   const from = mine[0]?.from_day; // lineups carry over until a new one is saved
   if (from < day.day) $('#lineup-status').textContent += ` · Vale la formazione della ${from}ª giornata${locked ? '' : ', finché non ne salvi una nuova'}`;
@@ -406,7 +406,7 @@ let clockDay;
 function tick() {
   const d = days.find(d => !isLocked(d)), el = $('#countdown'), live = inProgress(), key = `${d?.day}/${live?.day}`;
   // a day just locked, or the one in progress just ended: refresh the lineup
-  if (clockDay && clockDay !== key) { fillDaySelect($('#lineup-day'), currentDay()); if (me) loadLineup(); }
+  if (clockDay && clockDay !== key) { fillDaySelect($('#lineup-day'), lineupDay()); if (me) loadLineup(); }
   clockDay = key;
   el.hidden = !d && !live;
   if (live) { // no countdown while a day is being played
@@ -468,7 +468,7 @@ countUp(document.querySelectorAll('.top b'));
 tick();
 setInterval(tick, 1000);
 
-fillDaySelect($('#lineup-day'), currentDay());
+fillDaySelect($('#lineup-day'), lineupDay());
 fillDaySelect($('#standings-day'), lastPlayedDay());
 // setTimeout: supabase-js advises against awaiting its calls inside this callback
 sb.auth.onAuthStateChange((_event, session) => setTimeout(() => setUser(session?.user ?? null)));

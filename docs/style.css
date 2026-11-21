@@ -458,5 +458,3 @@ button.ghost:not(.link):hover:not(:disabled) { background-color: transparent; ba
 .history p b { color: var(--fg); font-variant-numeric: tabular-nums; }
 .danger { margin: 32px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
 @media (max-width: 760px) { .profile-grid { grid-template-columns: 1fr; } }
-/* lineup shown but not editable while the previous day is being played */
-#picks.readonly .remove { display: none; }
