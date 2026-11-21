@@ -43,8 +43,9 @@ create policy "read" on public.matches  for select using (true);
 create policy "read" on public.ratings  for select using (true);
 create policy "own"  on public.lineups  for select using (user_id = auth.uid());
 
+-- Una giornata è finita 2 ore dopo la palla a due della sua ultima partita (come top_last_day).
 create view public.days with (security_invoker = on) as
-  select day, min(starts_at) starts_at from public.matches group by day;
+  select day, min(starts_at) starts_at, max(starts_at) + interval '2 hours' ends_at from public.matches group by day;
 
 create view public.player_stats with (security_invoker = on) as
   select player_id, count(*) filter (where min > 0) games,
@@ -86,8 +87,9 @@ begin
   select min(starts_at) into start from public.matches where day = p_day;
   if start is null then raise exception 'Giornata inesistente'; end if;
   if now() >= start then raise exception 'Giornata già iniziata: formazione bloccata'; end if;
-  if exists (select 1 from public.matches group by day having day < p_day and min(starts_at) > now()) then
-    raise exception 'Puoi schierare solo la prossima giornata';
+  -- shortcut: a postponed match keeps its day "in corso" until played; fix its starts_at by hand if that blocks a day
+  if exists (select 1 from public.matches group by day having day < p_day and max(starts_at) + interval '2 hours' > now()) then
+    raise exception 'Puoi schierare solo la prossima giornata, quando la precedente è finita';
   end if;
   if coalesce(cardinality(p_players), 0) <> 5 or (select count(distinct x) from unnest(p_players) x) <> 5 then
     raise exception 'Servono 5 giocatori diversi';

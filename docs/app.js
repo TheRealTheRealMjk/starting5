@@ -21,6 +21,8 @@ let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().rep
 
 const isLocked = d => Date.parse(d.starts_at) <= Date.now();
 const dayLabel = d => `${d.day}ª giornata — ${new Date(d.starts_at).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}${isLocked(d) ? ' · chiusa' : ''}`;
+// A started day that is not over yet: the next lineup opens only when it ends (as in save_lineup).
+const inProgress = () => days.find(d => isLocked(d) && Date.parse(d.ends_at) > Date.now());
 const currentDay = () => (days.find(d => !isLocked(d)) ?? days.at(-1))?.day;
 const record = id => { const r = records.get(id); return r ? `${r.wins}-${r.losses}` : '0-0'; };
 // The match a team plays on a day: { opp: name, home: bool, oppRecord: 'W-L' } or undefined.
@@ -287,11 +289,13 @@ async function loadLineup() {
   const day = selectedDay();
   if (!day) return;
   const mine = await q(sb.rpc('my_lineup', { p_day: day.day }));
-  const locked = isLocked(day);
+  const locked = isLocked(day), wait = !locked && inProgress();
   picked = new Set(mine.map(p => p.id));
-  $('#picker').hidden = locked;
+  $('#picker').hidden = locked || !!wait;
+  $('#picks').classList.toggle('readonly', !!wait);
   $('#lineup-status').textContent = locked
     ? `Giornata bloccata. Totale: ${mine.reduce((s, p) => s + (p.points ?? 0), 0)} punti`
+    : wait ? `Potrai schierare il quintetto quando finisce la ${wait.day}ª giornata`
     : `Si blocca il ${new Date(day.starts_at).toLocaleString('it-IT', { dateStyle: 'full', timeStyle: 'short' })}`;
   const from = mine[0]?.from_day; // lineups carry over until a new one is saved
   if (from < day.day) $('#lineup-status').textContent += ` · Vale la formazione della ${from}ª giornata${locked ? '' : ', finché non ne salvi una nuova'}`;
@@ -400,10 +404,20 @@ if (nextGames.length) {
 // Countdown to the next lock (first tip-off of the next open day), refreshed every second.
 let clockDay;
 function tick() {
-  const d = days.find(d => !isLocked(d)), el = $('#countdown');
-  if (clockDay && clockDay !== d?.day) { fillDaySelect($('#lineup-day'), currentDay()); if (me) loadLineup(); } // a day just locked: the next one opens
-  clockDay = d?.day;
-  el.hidden = !d;
+  const d = days.find(d => !isLocked(d)), el = $('#countdown'), live = inProgress(), key = `${d?.day}/${live?.day}`;
+  // a day just locked, or the one in progress just ended: refresh the lineup
+  if (clockDay && clockDay !== key) { fillDaySelect($('#lineup-day'), currentDay()); if (me) loadLineup(); }
+  clockDay = key;
+  el.hidden = !d && !live;
+  if (live) { // no countdown while a day is being played
+    if (el.dataset.day !== `live${live.day}`) {
+      el.dataset.day = `live${live.day}`;
+      el.classList.remove('soon');
+      el.setAttribute('aria-label', `${live.day}ª giornata in corso`);
+      el.innerHTML = `<p>In campo ora · <b>${live.day}ª giornata in corso</b></p>`;
+    }
+    return;
+  }
   if (!d) return;
   const s = Math.floor((Date.parse(d.starts_at) - Date.now()) / 1000);
   const parts = [[Math.floor(s / 86400), 'giorni'], [Math.floor(s / 3600) % 24, 'ore'], [Math.floor(s / 60) % 60, 'min'], [s % 60, 'sec']];

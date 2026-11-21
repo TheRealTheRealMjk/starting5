@@ -33,6 +33,10 @@ await rejects(as(A, 'select save_lineup(2, array[1,1,2,3,4])'), /5 giocatori/);
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,99])'), /non valido/);
 await rejects(as(A, 'select save_lineup(9, array[1,2,3,4,5])'), /inesistente/);
 await rejects(as(A, 'select save_lineup(3, array[3,4,6,7,8])'), /solo la prossima/); // day 2 is still open
+// day 1 still in progress (a match tipped off 1 hour ago): day 2 can't be picked yet
+await pg.exec(`insert into matches values (14,1,now()-interval '1 hour',1,2,0)`);
+await rejects(as(A, 'select save_lineup(2, array[3,4,6,7,8])'), /precedente è finita/);
+await pg.exec('delete from matches where id = 14');
 await rejects(as(A, 'select save_lineup(2, array[1,2,3,4,5])'), /almeno 2/); // 4 guards
 await rejects(as(A, 'select save_lineup(2, array[1,5,6,7,8])'), /almeno 2/); // 4 bigs
 await as(A, 'select save_lineup(2, array[3,4,6,7,8])'); // 2+3 is fine
