@@ -476,6 +476,17 @@ function fillTicker() {
   $('#ticker').hidden = false;
 }
 fillTicker();
+// News written by the sync (every 10 min): reload them every 5 min while the page is visible.
+async function loadNews() {
+  if (document.hidden) return;
+  const news = await q(sb.from('news').select('day, body, created_at').order('id', { ascending: false }).limit(10)).catch(() => null);
+  if (!news?.length) return;
+  $('#news-list').innerHTML = news.map(n => `<li><time datetime="${n.created_at}"><b>${n.day}ª</b> · ${esc(new Date(n.created_at).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}</time>${esc(n.body)}</li>`).join('');
+  $('#news').hidden = false;
+}
+loadNews();
+setInterval(loadNews, 5 * 60e3);
+document.addEventListener('visibilitychange', loadNews);
 countUp(document.querySelectorAll('.top b'));
 tick();
 setInterval(tick, 1000);

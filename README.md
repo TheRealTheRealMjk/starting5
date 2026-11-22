@@ -16,6 +16,7 @@ Classifica per giornata e generale. La formazione si blocca alla palla a due del
 3. **Edge Functions** → *Deploy a new function* → *Via Editor*, nome `sync`, incolla `supabase/functions/sync/index.ts` → *Deploy*.
    Poi nelle impostazioni della funzione disattiva **Verify JWT** (la protegge il secret del punto seguente).
 4. **Edge Functions → Secrets** → aggiungi `SYNC_SECRET` con una stringa lunga e casuale (es. da un password generator).
+   Facoltativo: `GEMINI_API_KEY` (chiave gratuita da aistudio.google.com) per le news in home scritte dall'AI; senza, le news usano un testo fisso.
 5. **SQL Editor** → incolla `supabase/cron.sql`, sostituisci `SYNC_SECRET` (e l'URL del progetto, se diverso) → *Run*.
    Pianifica l'import e ne lancia subito uno completo. Dopo un minuto in **Table Editor** le tabelle `matches`, `players`, `ratings` devono essere piene.
    Gli errori si vedono in **Edge Functions → sync → Logs**.

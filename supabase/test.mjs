@@ -127,4 +127,10 @@ await pg.exec(`update matches set home_score = 80, away_score = 70 where id = 10
   update matches set home_score = 0, away_score = 0 where id = 20`); // 20 not played yet: ignored
 assert.deepEqual(await as(A, 'select team_id, wins::int, losses::int from team_records order by 1'),
   [{ team_id: 1, wins: 1, losses: 3 }, { team_id: 2, wins: 3, losses: 1 }]);
+// news: readable by everyone, written only by the sync; one row per key
+await pg.exec(`insert into news (day, key, body) values (1, 'day:1', 'Si chiude la 1ª giornata.')`);
+await rejects(pg.exec(`insert into news (day, key, body) values (1, 'day:1', 'doppia')`), /duplicate/);
+assert.deepEqual(await asAuth(A, 'select key from news'), [{ key: 'day:1' }]);
+await rejects(asAuth(A, `insert into news (day, key, body) values (1, 'x', 'y')`), /denied|policy/);
+assert.deepEqual(await as(A, 'select * from most_picked(1)'), [{ name: 'P1', picks: 1n }]); // only anna's lineup is left
 console.log('ok');
