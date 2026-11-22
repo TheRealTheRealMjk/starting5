@@ -323,6 +323,7 @@ a.button { display: inline-block; text-decoration: none; }
 #players { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); column-gap: 32px; align-items: start; }
 #players .nm { display: grid; line-height: 1.3; }
 #players .meta { color: var(--muted); font-size: 13px; }
+#players .meta b { color: var(--fg); }
 #players .opp { font-size: 13px; color: var(--fg); }
 #players .opp b { font: 800 15px/1 var(--display); color: var(--accent-text); }
 @media (max-width: 760px) {

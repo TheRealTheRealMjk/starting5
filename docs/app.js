@@ -15,6 +15,7 @@ async function q(promise) {
 
 let me = null, days = [], players = [], picked = new Set();
 let matches = [], teamName = new Map(), records = new Map(); // team id → name, team id → {wins, losses}
+let prevDay, prevVal = new Map(); // last finished day, player id → its rating
 let leagues = [], league = ''; // league = id shown in the standings, '' = everyone
 // Invite link ?lega=CODE: joined right after login, or passed to signUp so the server joins it at account creation.
 let invite = new URLSearchParams(location.search).get('lega')?.toUpperCase().replace(/[^A-Z0-9]/g, '') || null;
@@ -354,7 +355,7 @@ function renderPlayers() {
   $('#players').innerHTML = cols.map(([title, shown]) => `<fieldset><legend>${title} · ${s ? `${shown.length} ${shown.length === 1 ? 'trovato' : 'trovati'}` : `i migliori per media entro ${dan(Math.max(left(), 0))}`}</legend>${shown.map(p => `
     <label><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? 'checked' : ''}
       ${!picked.has(p.id) && !canPick(p) ? 'disabled' : ''}>
-      <span class="nm"><span>${esc(p.name)} <small>${esc(p.role)}</small></span><span class="meta">${esc(p.team)}</span><span class="opp">${vs(p.team)}</span></span>
+      <span class="nm"><span>${esc(p.name)} <small>${esc(p.role)}</small></span><span class="meta">${esc(p.team)}${prevDay ? ` · ${prevDay}ª giornata <b title="Valutazione nella ${prevDay}ª giornata">${prevVal.get(p.id) ?? '–'}</b>` : ''}</span><span class="opp">${vs(p.team)}</span></span>
       <span class="avg" title="Costo = valutazione media${p.games ? ` in ${p.games} partite` : ': nessuna partita giocata'}">${dan(cost(p))}</span></label>`).join('')}</fieldset>`).join('');
 }
 $('#picks').onclick = e => {
@@ -400,6 +401,9 @@ try {
 }
 teamName = new Map(teams.map(t => [t.id, t.name]));
 records = new Map(recs.map(r => [r.team_id, r]));
+// Last finished day's ratings, shown in the picker; a failure only hides them.
+prevDay = days.filter(d => Date.parse(d.ends_at) <= Date.now()).at(-1)?.day;
+if (prevDay) prevVal = new Map((await sb.from('ratings').select('player_id, val, matches!inner(day)').eq('matches.day', prevDay)).data?.map(r => [r.player_id, r.val]) ?? []);
 const topList = (rows, val) => rows.length
   ? rows.map(r => `<li><span class="nm">${esc(r.name)} <small>${esc(r.team)}</small></span><b>${val(r)}</b></li>`).join('')
   : '<li class="empty">Ancora nessun dato</li>';
