@@ -88,18 +88,21 @@ const STYLE = `Sei un giornalista sportivo italiano che scrive di basket di Seri
 Scrivi una breve notizia in italiano: 2-3 frasi, massimo 60 parole, tono vivace.
 Usa SOLO i dati JSON forniti: non inventare statistiche, citazioni, infortuni o altri dettagli.
 "val" è la valutazione Lega del giocatore. Niente titolo, niente markdown, niente emoji.`;
+const FANTA = `Scrivi in italiano i complimenti al vincitore della giornata di Starting5, il fantabasket della Serie A:
+2-3 frasi, massimo 60 parole, tono vivace. Chiama il vincitore esattamente {VINCITORE}.
+Usa SOLO i dati JSON forniti: "punti" è la somma delle valutazioni Lega del suo quintetto. Niente titolo, niente markdown, niente emoji.`;
 
 // Gemini writes from public LBA data only (no usernames: free-tier prompts may be used by Google); fixed text if it fails.
 // On failure returns null so the next run retries; the fixed text only 36h after tip-off (games leave the sync after 48h).
 // Free-tier models are often overloaded (503): then the lighter one gets a try.
-async function write(facts: unknown, fallback: string, since: string) {
+async function write(facts: unknown, fallback: string, since: string, style = STYLE) {
   const key = Deno.env.get('GEMINI_API_KEY');
   if (!key) return fallback;
   for (const model of ['gemini-flash-latest', 'gemini-flash-lite-latest']) {
     try {
       const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: STYLE }] }, contents: [{ parts: [{ text: JSON.stringify(facts) }] }] }),
+        body: JSON.stringify({ systemInstruction: { parts: [{ text: style }] }, contents: [{ parts: [{ text: JSON.stringify(facts) }] }] }),
         signal: AbortSignal.timeout(15000),
       });
       if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
@@ -111,6 +114,25 @@ async function write(facts: unknown, fallback: string, since: string) {
   return Date.now() - Date.parse(since) > 36 * 3600e3 ? fallback : null;
 }
 
+// Congratulations to the Starting5 winner of the day. Gemini writes {VINCITORE}, the username is put in here:
+// usernames never go to Google. Ties get the fixed text naming every winner.
+async function fanta(day: number, since: string) {
+  const table = check(await db.rpc('standings', { p_day: day })) as any[];
+  const winners = table.filter(r => r.points === table[0]?.points);
+  if (!winners.length || !table[0].points) return null;
+  const [pick] = check(await db.rpc('most_picked', { p_day: day })) as any[];
+  const fixed = `Fanta: {VINCITORE} vince la ${day}ª giornata con ${table[0].points} punti.` +
+    (pick ? ` Il più schierato: ${pick.name}, in ${pick.picks} quintetti.` : '');
+  const names = winners.map(w => w.username).join(' e ');
+  if (winners.length > 1) return fixed.replace('vince', 'vincono a pari merito').replaceAll('{VINCITORE}', names);
+  const team = check(await db.rpc('day_lineup', { p_day: day, p_username: names })) as any[];
+  const text = await write({ giornata: day, punti: table[0].points, distacco_dal_secondo: table[1] ? table[0].points - table[1].points : null,
+    partecipanti: table.length, quintetto: team.map(p => ({ nome: p.name, squadra: p.team, val: p.points ?? 0 })),
+    giocatore_piu_schierato_da_tutti: pick ?? null }, fixed, since, FANTA);
+  if (text === null) return null;
+  return (text.includes('{VINCITORE}') ? text : fixed).replaceAll('{VINCITORE}', names);
+}
+
 // One news per finished game, then a day recap and the fanta result when the whole day is over.
 async function syncNews() {
   const days = await recentDays();
@@ -119,7 +141,7 @@ async function syncNews() {
   const done = new Set((check(await db.from('news').select('key').in('day', days)) as any[]).map(n => n.key));
   const teams = new Map((check(await db.from('teams').select('id, name')) as any[]).map(t => [t.id, t.name]));
   const ended = ms.filter(m => m.status === 2);
-  const ratings = check(await db.from('ratings').select('match_id, player_id, val')
+  const ratings = check(await db.from('ratings').select('match_id, player_id, val, min')
     .in('match_id', ended.map(m => m.id)).order('val', { ascending: false })) as any[];
   const players = new Map((check(await db.from('players').select('id, name, team_id')
     .in('id', [...new Set(ratings.map(r => r.player_id))])) as any[]).map(p => [p.id, p]));
@@ -136,18 +158,25 @@ async function syncNews() {
       `${r.casa} – ${r.ospite} ${r.punti_casa}-${r.punti_ospite}. Migliore in campo ${top[0].nome} con ${top[0].val} di valutazione.`, m.starts_at) });
   }
   for (const day of days) {
-    const dm = ms.filter(m => m.day === day);
-    if (done.has(`day:${day}`) || dm.some(m => m.status !== 2) || rows.length >= MAX) continue;
-    const top = best(dm.map(m => m.id), 5), last = dm.map(m => m.starts_at).sort().at(-1);
-    const recap = await write({ giornata: day, risultati: dm.map(result), migliori: top },
-      `Si chiude la ${day}ª giornata.${top[0] ? ` MVP: ${top[0].nome} con ${top[0].val} di valutazione.` : ''}`, last);
-    if (recap === null) continue; // fanta news waits for the recap, so it stays right after it
-    rows.push({ day, key: `day:${day}`, body: recap });
-    // fixed text: usernames never go to Gemini
-    const [lead] = check(await db.rpc('standings', { p_day: day })) as any[];
-    const [pick] = check(await db.rpc('most_picked', { p_day: day })) as any[];
-    if (lead) rows.push({ day, key: `fanta:${day}`, body: `Fanta: ${lead.username} vince la ${day}ª giornata con ${lead.points} punti.` +
-      (pick ? ` Il più schierato: ${pick.name}, in ${pick.picks} quintetti.` : '') });
+    const dm = ms.filter(m => m.day === day), last = dm.map(m => m.starts_at).sort().at(-1);
+    if (dm.some(m => m.status !== 2)) continue;
+    if (!done.has(`day:${day}`)) {
+      if (rows.length >= MAX) continue;
+      const ids = dm.map(m => m.id), res = dm.map(result), top = best(ids, 5);
+      const margin = (r: any) => Math.abs(r.punti_casa - r.punti_ospite), total = (r: any) => r.punti_casa + r.punti_ospite;
+      const mins = ratings.filter(r => ids.includes(r.match_id)).sort((a, b) => b.min - a.min)[0];
+      const recap = await write({ giornata: day, risultati: res, migliori_valutazioni: top,
+        vittoria_piu_larga: res.reduce((a, b) => margin(b) > margin(a) ? b : a),
+        partita_con_piu_punti: res.reduce((a, b) => total(b) > total(a) ? b : a),
+        vittorie_in_trasferta: res.filter(r => r.punti_ospite > r.punti_casa).length,
+        piu_minuti_in_campo: mins && { nome: players.get(mins.player_id)?.name, minuti: mins.min } },
+        `Si chiude la ${day}ª giornata.${top[0] ? ` MVP: ${top[0].nome} con ${top[0].val} di valutazione.` : ''}`, last);
+      if (recap === null) continue; // fanta news waits for the recap, so it stays right after it
+      rows.push({ day, key: `day:${day}`, body: recap });
+    }
+    if (done.has(`fanta:${day}`) || rows.length >= MAX) continue;
+    const body = await fanta(day, last);
+    if (body) rows.push({ day, key: `fanta:${day}`, body });
   }
   const ready = rows.filter(r => r.body !== null);
   if (ready.length) check(await db.from('news').upsert(ready, { onConflict: 'key', ignoreDuplicates: true }));
