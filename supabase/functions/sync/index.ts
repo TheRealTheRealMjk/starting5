@@ -114,17 +114,23 @@ async function write(facts: unknown, fallback: string, since: string, style = ST
   return Date.now() - Date.parse(since) > 36 * 3600e3 ? fallback : null;
 }
 
+// The day's Starting5 winner(s) right now: vincitore = usernames joined (ties), punti = their score.
+async function winner(day: number) {
+  const table = check(await db.rpc('standings', { p_day: day })) as any[];
+  const punti = table[0]?.points ?? 0;
+  const top = table.filter(r => r.points === punti);
+  return { table, ties: top.length > 1, facts: { vincitore: top.map(r => r.username).join(' e '), punti } };
+}
+
 // Congratulations to the Starting5 winner of the day. Gemini writes {VINCITORE}, the username is put in here:
 // usernames never go to Google. Ties get the fixed text naming every winner.
-async function fanta(day: number, since: string) {
-  const table = check(await db.rpc('standings', { p_day: day })) as any[];
-  const winners = table.filter(r => r.points === table[0]?.points);
-  if (!winners.length || !table[0].points) return null;
+async function fanta(day: number, since: string, { table, ties, facts }: Awaited<ReturnType<typeof winner>>) {
+  if (!facts.punti) return null;
   const [pick] = check(await db.rpc('most_picked', { p_day: day })) as any[];
   const fixed = `Fanta: {VINCITORE} vince la ${day}ª giornata con ${table[0].points} punti.` +
     (pick ? ` Il più schierato: ${pick.name}, in ${pick.picks} quintetti.` : '');
-  const names = winners.map(w => w.username).join(' e ');
-  if (winners.length > 1) return fixed.replace('vince', 'vincono a pari merito').replaceAll('{VINCITORE}', names);
+  const names = facts.vincitore;
+  if (ties) return fixed.replace('vince', 'vincono a pari merito').replaceAll('{VINCITORE}', names);
   const team = check(await db.rpc('day_lineup', { p_day: day, p_username: names })) as any[];
   const text = await write({ giornata: day, punti: table[0].points, distacco_dal_secondo: table[1] ? table[0].points - table[1].points : null,
     partecipanti: table.length, quintetto: team.map(p => ({ nome: p.name, squadra: p.team, val: p.points ?? 0 })),
@@ -133,12 +139,14 @@ async function fanta(day: number, since: string) {
   return (text.includes('{VINCITORE}') ? text : fixed).replaceAll('{VINCITORE}', names);
 }
 
-// One news per finished game, then a day recap and the fanta result when the whole day is over.
+// One news per finished game, then a day recap and the fanta result when the whole day is over;
+// a correction news if LBA fixes its data later and the fanta winner or score changes.
 async function syncNews() {
   const days = await recentDays();
   if (!days.length) return 0;
   const ms = check(await db.from('matches').select('id, day, starts_at, home_id, away_id, status, home_score, away_score').in('day', days)) as any[];
-  const done = new Set((check(await db.from('news').select('key').in('day', days)) as any[]).map(n => n.key));
+  const news = check(await db.from('news').select('day, key, facts').in('day', days).order('id')) as any[];
+  const done = new Set(news.map(n => n.key));
   const teams = new Map((check(await db.from('teams').select('id, name')) as any[]).map(t => [t.id, t.name]));
   const ended = ms.filter(m => m.status === 2);
   const ratings = check(await db.from('ratings').select('match_id, player_id, val, min')
@@ -148,18 +156,23 @@ async function syncNews() {
   const best = (ids: number[], n: number) => ratings.filter(r => ids.includes(r.match_id)).slice(0, n)
     .map(r => ({ nome: players.get(r.player_id)?.name, squadra: teams.get(players.get(r.player_id)?.team_id), val: r.val }));
   const result = (m: any) => ({ casa: teams.get(m.home_id), ospite: teams.get(m.away_id), punti_casa: m.home_score, punti_ospite: m.away_score });
-  const rows: { day: number; key: string; body: string | null }[] = [];
+  // LBA sometimes marks a game over with a partial box score: a full one has 5 players x 40' (more with overtime).
+  // After 36h we stop waiting (same rule as the fixed text) so a broken game never blocks the day.
+  const full = (m: any) => ratings.filter(r => r.match_id === m.id).reduce((s, r) => s + r.min, 0) >= 400 ||
+    Date.now() - Date.parse(m.starts_at) > 36 * 3600e3;
+  const rows: { day: number; key: string; body: string | null; facts?: unknown }[] = [];
   const MAX = 3; // news per run (up to 2 Gemini calls each), so the function stays well inside its time limit; the rest goes in the next run
 
   for (const m of ended) {
     const top = best([m.id], 3), r = result(m);
-    if (done.has(`match:${m.id}`) || !top.length || rows.length >= MAX) continue; // no ratings yet: next run
+    if (done.has(`match:${m.id}`) || !top.length || !full(m) || rows.length >= MAX) continue; // no full ratings yet: next run
     rows.push({ day: m.day, key: `match:${m.id}`, body: await write({ partita: r, migliori: top },
       `${r.casa} – ${r.ospite} ${r.punti_casa}-${r.punti_ospite}. Migliore in campo ${top[0].nome} con ${top[0].val} di valutazione.`, m.starts_at) });
   }
   for (const day of days) {
     const dm = ms.filter(m => m.day === day), last = dm.map(m => m.starts_at).sort().at(-1);
-    if (dm.some(m => m.status !== 2)) continue;
+    // one hour after the last game's end (~2h), so LBA has time to fix its box scores
+    if (dm.some(m => m.status !== 2 || !full(m)) || Date.now() - Date.parse(last) < 3 * 3600e3) continue;
     if (!done.has(`day:${day}`)) {
       if (rows.length >= MAX) continue;
       const ids = dm.map(m => m.id), res = dm.map(result), top = best(ids, 5);
@@ -174,9 +187,21 @@ async function syncNews() {
       if (recap === null) continue; // fanta news waits for the recap, so it stays right after it
       rows.push({ day, key: `day:${day}`, body: recap });
     }
-    if (done.has(`fanta:${day}`) || rows.length >= MAX) continue;
-    const body = await fanta(day, last);
-    if (body) rows.push({ day, key: `fanta:${day}`, body });
+    if (rows.length >= MAX || !done.has(`day:${day}`) && !rows.some(r => r.key === `day:${day}`)) continue;
+    const w = await winner(day);
+    if (!done.has(`fanta:${day}`)) {
+      const body = await fanta(day, last, w);
+      if (body) rows.push({ day, key: `fanta:${day}`, body, facts: w.facts });
+      continue;
+    }
+    // what the last fanta/correction news said (fanta news written before facts existed: nothing to compare)
+    const said = news.filter(n => n.day === day && /^(fanta|fix):/.test(n.key)).at(-1)?.facts;
+    if (!said || !w.facts.punti || (said.vincitore === w.facts.vincitore && said.punti === w.facts.punti)) continue;
+    const fixes = news.filter(n => n.day === day && n.key.startsWith('fix:')).length;
+    rows.push({ day, key: `fix:${day}:${fixes + 1}`, facts: w.facts, body: `Aggiornamento ${day}ª giornata: la Lega ha corretto i dati. ` +
+      (said.vincitore === w.facts.vincitore
+        ? `${w.facts.vincitore} ${w.ties ? "restano" : "resta"} in vetta con ${w.facts.punti} punti (prima ${said.punti}).`
+        : `${w.facts.vincitore} ${w.ties ? 'vincono a pari merito' : 'vince'} con ${w.facts.punti} punti (prima ${said.vincitore} con ${said.punti}).`) });
   }
   const ready = rows.filter(r => r.body !== null);
   if (ready.length) check(await db.from('news').upsert(ready, { onConflict: 'key', ignoreDuplicates: true }));

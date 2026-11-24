@@ -369,10 +369,11 @@ create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.handle_new_user();
 
 -- ---------- news in home ----------
--- News: una riga per evento (key = 'match:<id>', 'day:<n>', 'fanta:<n>'), così il sync non la riscrive due volte.
+-- News: una riga per evento (key = 'match:<id>', 'day:<n>', 'fanta:<n>', 'fix:<n>:<k>'), così il sync non la riscrive due volte.
 create table public.news (
   id bigint generated always as identity primary key,
   day int not null, key text not null unique, body text not null,
+  facts jsonb, -- fanta/rettifica: vincitore e punti scritti, per accorgersi se la Lega corregge i dati dopo
   created_at timestamptz not null default now());
 alter table public.news enable row level security;
 create policy "read" on public.news for select using (true);
