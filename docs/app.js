@@ -54,6 +54,7 @@ function showTab(name) {
   document.querySelectorAll('main section').forEach(s => s.hidden = s.id !== `tab-${name}`);
   if (name === 'day') loadStandings($('#day-table'), $('#standings-day').value);
   if (name === 'total') loadStandings($('#total-table'));
+  if (name === 'stats') loadStats().catch(err => { statsLoaded = false; $('#stats-msg').textContent = err.message; });
   if (name === 'profile') { $('#rename-msg').textContent = ''; loadProfile().catch(err => $('#rename-msg').textContent = err.message); }
 }
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -508,3 +509,69 @@ fillDaySelect($('#lineup-day'), lineupDay());
 fillDaySelect($('#standings-day'), lastPlayedDay());
 // setTimeout: supabase-js advises against awaiting its calls inside this callback
 sb.auth.onAuthStateChange((_event, session) => setTimeout(() => setUser(session?.user ?? null)));
+
+// ---------- stats (last finished day, computed here from the public ratings) ----------
+let statsLoaded = false;
+async function loadStats() {
+  if (statsLoaded) return;
+  statsLoaded = true;
+  if (!prevDay) return $('#stats-msg').textContent = 'Nessuna giornata conclusa finora.';
+  $('#stats-msg').textContent = 'Caricamento…';
+  const rows = [];
+  for (let i = 0; ; i += 1000) { // the API returns at most 1000 rows per request
+    const page = await q(sb.from('ratings').select('player_id, val, min, matches!inner(day)').lte('matches.day', prevDay)
+      .order('match_id').order('player_id').range(i, i + 999));
+    rows.push(...page);
+    if (page.length < 1000) break;
+  }
+  // shortcut: only active players (player_list) are known by name and role; one who left the league is skipped
+  const byId = new Map(players.map(p => [p.id, p])), st = new Map();
+  for (const r of rows) {
+    if (!(r.min > 0) || !byId.has(r.player_id)) continue; // bench minutes don't count, as in player_stats
+    const s = st.get(r.player_id) ?? st.set(r.player_id, { g: 0, sum: 0 }).get(r.player_id);
+    if (r.matches.day === prevDay) s.val = (s.val ?? 0) + r.val; else { s.g++; s.sum += r.val; }
+  }
+  // before = average up to the previous day, rounded as player_stats
+  const played = [...st].filter(([, s]) => s.val !== undefined)
+    .map(([id, s]) => ({ ...byId.get(id), val: s.val, before: s.g ? Math.round(s.sum / s.g * 10) / 10 : null }));
+  const item = (p, detail, val) => `<li><span class="nm">${esc(p.name)} <small>${esc(p.team)}${detail ? ` · ${detail}` : ''}</small></span><b>${val}</b></li>`;
+  const list = (sel, rows, f) => $(sel).innerHTML = rows.length ? rows.map(f).join('') : '<li class="empty">Ancora nessun dato</li>';
+  const top = (arr, k) => [...arr].sort((a, b) => k(b) - k(a)).slice(0, 5);
+
+  // % over the own average, only from an average of 5: below it a few points make huge percentages
+  const vsAvg = played.filter(p => p.before >= 5).map(p => ({ ...p, pct: (p.val - p.before) / p.before * 100 }));
+  const pctItem = p => item(p, `${p.val} vs media ${p.before.toFixed(1)}`, `${p.pct > 0 ? '+' : ''}${Math.round(p.pct)}%`);
+  list('#st-surprise', top(vsAvg, p => p.pct), pctItem);
+  list('#st-flop', top(vsAvg, p => -p.pct), pctItem);
+  for (const [slot, name] of [['L', 'big'], ['P', 'small']]) {
+    list(`#st-${name}-avg`, top(players.filter(p => slotOf(p) === slot && p.games >= 3), p => p.avg_val), p => item(p, `${p.games} partite`, Number(p.avg_val).toFixed(1)));
+    list(`#st-${name}-day`, top(played.filter(p => slotOf(p) === slot), p => p.val), p => item(p, '', p.val));
+  }
+  const best = bestFive(played);
+  list('#st-best', best, p => item(p, `${slotOf(p) === 'P' ? 'piccolo' : 'lungo'} · costava ${dan(costBefore(p))}`, p.val));
+  $('#best-sum').textContent = best.length ? `${best.reduce((s, p) => s + p.val, 0)} punti · ${dan(best.reduce((s, p) => s + costBefore(p), 0))} spesi` : '';
+  $('#stats-msg').textContent = `Dati della ${prevDay}ª giornata.`;
+  countUp(document.querySelectorAll('#tab-stats ol:not(#st-surprise, #st-flop) b'));
+}
+// Price on the day = average before it, as the budget rule in save_lineup (negative or no games = 0), in tenths.
+const costBefore = p => Math.max(Math.round((p.before ?? 0) * 10), 0);
+// Highest total of 5 with 2-3 piccoli and the 80 Ðan budget: 0/1 knapsack over (players taken, piccoli taken, tenths spent).
+function bestFive(cands) {
+  cands = cands.filter(p => slotOf(p));
+  const B = BUDGET * 10, at = (k, pk, b) => (k * 6 + pk) * (B + 1) + b;
+  const sum = new Float64Array(6 * 6 * (B + 1)).fill(-Infinity), pick = [];
+  sum[at(0, 0, 0)] = 0; pick[at(0, 0, 0)] = [];
+  for (const p of cands) {
+    const c = costBefore(p), isP = slotOf(p) === 'P' ? 1 : 0;
+    for (let k = 4; k >= 0; k--) for (let pk = k; pk >= 0; pk--) for (let b = B - c; b >= 0; b--) { // descending k: each player once
+      const from = at(k, pk, b), to = at(k + 1, pk + isP, b + c);
+      if (sum[from] + p.val > sum[to]) { sum[to] = sum[from] + p.val; pick[to] = [...pick[from], p]; }
+    }
+  }
+  let best = [], top = -Infinity;
+  for (const pk of [2, 3]) for (let b = 0; b <= B; b++) {
+    const i = at(5, pk, b);
+    if (sum[i] > top) { top = sum[i]; best = pick[i]; }
+  }
+  return best.sort((a, b) => (slotOf(a) === 'P' ? 0 : 1) - (slotOf(b) === 'P' ? 0 : 1) || b.val - a.val);
+}

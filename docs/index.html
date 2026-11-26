@@ -7,7 +7,7 @@
   <meta name="description" content="Scegli 5 giocatori di Serie A ogni giornata: vince chi somma la valutazione Lega più alta.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f26b1d'/%3E%3Cg fill='none' stroke='%231a1206' stroke-width='3'%3E%3Cpath d='M2 32h60M32 2v60M11 11c12 10 12 32 0 42M53 11c-12 10-12 32 0 42'/%3E%3C/g%3E%3C/svg%3E">
   <link rel="stylesheet" href="fonts.css?v=6">
-  <link rel="stylesheet" href="style.css?v=23">
+  <link rel="stylesheet" href="style.css?v=25">
 </head>
 <body>
   <header class="topbar">
@@ -70,6 +70,7 @@
     <button data-tab="lineup" hidden>La mia formazione</button>
     <button data-tab="day">Classifica giornata</button>
     <button data-tab="total">Classifica generale</button>
+    <button data-tab="stats">Statistiche</button>
     <button data-tab="leagues">Leghe</button>
   </nav>
 
@@ -131,6 +132,19 @@
       <div class="bar"><label class="select league-select" hidden>Classifica <select class="standings-league"></select></label></div>
       <table class="card standings"><thead><tr><th>#</th><th>Utente</th><th>Punti</th></tr></thead><tbody id="total-table"></tbody></table>
     </section>
+    <section id="tab-stats" hidden>
+      <p class="hint" id="stats-msg" role="status"></p>
+      <div class="tops">
+        <div class="card top wide"><h3>Best <b>5</b> <small id="best-sum">miglior quintetto schierabile</small></h3><ol id="st-best"></ol></div>
+        <div class="card top"><h3>Surprise <b>5</b> <small>sopra la propria media (da 5 in su)</small></h3><ol id="st-surprise"></ol></div>
+        <div class="card top"><h3>Flop <b>5</b> <small>sotto la propria media (da 5 in su)</small></h3><ol id="st-flop"></ol></div>
+        <div class="card top"><h3>Top <b>5</b> Lunghi <small>media stagione</small></h3><ol id="st-big-avg"></ol></div>
+        <div class="card top"><h3>Top <b>5</b> Lunghi <small>giornata</small></h3><ol id="st-big-day"></ol></div>
+        <div class="card top"><h3>Top <b>5</b> Piccoli <small>media stagione</small></h3><ol id="st-small-avg"></ol></div>
+        <div class="card top"><h3>Top <b>5</b> Piccoli <small>giornata</small></h3><ol id="st-small-day"></ol></div>
+      </div>
+    </section>
+
     <section id="tab-leagues" hidden>
       <p class="hint" id="leagues-hint">Accedi per creare una lega privata o entrare in quella dei tuoi amici.</p>
       <div id="leagues-box" hidden>
@@ -178,6 +192,6 @@
     <p><a href="come-si-gioca.html">Come si gioca</a> · <a href="privacy.html">Privacy</a></p>
   </footer>
   <script src="vendor/supabase.js?v=6"></script>
-  <script type="module" src="app.js?v=26"></script>
+  <script type="module" src="app.js?v=28"></script>
 </body>
 </html>
