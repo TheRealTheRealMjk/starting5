@@ -483,11 +483,20 @@ fillTicker();
 // News written by the sync (every 10 min): reload them every 5 min while the page is visible.
 async function loadNews() {
   if (document.hidden) return;
-  const news = await q(sb.from('news').select('day, body, created_at').order('id', { ascending: false }).limit(10)).catch(() => null);
+  const news = await q(sb.from('news').select('day, body, created_at').order('id', { ascending: false }).limit(30)).catch(() => null);
   if (!news?.length) return;
   $('#news-list').innerHTML = news.map(n => `<li><time datetime="${n.created_at}"><b>${n.day}ª</b> · ${esc(new Date(n.created_at).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))}</time>${esc(n.body)}</li>`).join('');
   $('#news').hidden = false;
+  fitNews();
 }
+// Show the latest 6 news, the older ones by scrolling the list (items have different heights, so measure them).
+function fitNews() {
+  const ul = $('#news-list'), sixth = ul.children[5];
+  // capped at 70% of the screen: on a phone 6 long news are taller than the screen, and the page must stay scrollable past them
+  ul.style.maxHeight = sixth ? `min(${sixth.getBoundingClientRect().bottom - ul.getBoundingClientRect().top + ul.scrollTop}px, 70vh)` : '';
+}
+new ResizeObserver(fitNews).observe($('#news')); // width changes (rotation, scrollbar)
+document.fonts.ready.then(fitNews); // text heights change when the web font arrives
 loadNews();
 setInterval(loadNews, 5 * 60e3);
 document.addEventListener('visibilitychange', loadNews);

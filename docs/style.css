@@ -316,7 +316,7 @@ a.button { display: inline-block; text-decoration: none; }
 .games .team:last-child { text-align: right; }
 .games .team small { font: 600 14px/1.2 var(--display); color: var(--muted); font-variant-numeric: tabular-nums; }
 .games .dash { color: var(--muted); }
-.news ul { display: block; }
+.news ul { display: block; overflow-y: auto; }
 .news li { display: block; line-height: 1.5; }
 .news li:nth-child(2) { border-top: 1px solid var(--line); }
 .news time { display: inline; margin-right: 8px; }
