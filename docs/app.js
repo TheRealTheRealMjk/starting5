@@ -489,11 +489,11 @@ async function loadNews() {
   $('#news').hidden = false;
   fitNews();
 }
-// Show the latest 6 news, the older ones by scrolling the list (items have different heights, so measure them).
+// Show the latest 4 news, the older ones by scrolling the list (items have different heights, so measure them).
 function fitNews() {
-  const ul = $('#news-list'), sixth = ul.children[5];
-  // capped at 70% of the screen: on a phone 6 long news are taller than the screen, and the page must stay scrollable past them
-  ul.style.maxHeight = sixth ? `min(${sixth.getBoundingClientRect().bottom - ul.getBoundingClientRect().top + ul.scrollTop}px, 70vh)` : '';
+  const ul = $('#news-list'), fourth = ul.children[3];
+  // capped at 70% of the screen: on a phone 4 long news are taller than the screen, and the page must stay scrollable past them
+  ul.style.maxHeight = fourth ? `min(${fourth.getBoundingClientRect().bottom - ul.getBoundingClientRect().top + ul.scrollTop}px, 70vh)` : '';
 }
 new ResizeObserver(fitNews).observe($('#news')); // width changes (rotation, scrollbar)
 document.fonts.ready.then(fitNews); // text heights change when the web font arrives
