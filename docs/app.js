@@ -548,7 +548,9 @@ async function loadStats() {
     list(`#st-${name}-day`, top(played.filter(p => slotOf(p) === slot), p => p.val), p => item(p, '', p.val));
   }
   const best = bestFive(played);
-  list('#st-best', best, p => item(p, `${slotOf(p) === 'P' ? 'piccolo' : 'lungo'} · costava ${dan(costBefore(p))}`, p.val));
+  const pct = p => `${p.val >= p.before ? '+' : ''}${Math.round((p.val - p.before) / p.before * 100)}%`;
+  const change = p => p.before === null ? ' · prima partita' : p.before > 0 ? ` · ${pct(p)} sulla media` : ''; // the cost shown is the average itself
+  list('#st-best', best, p => item(p, `${slotOf(p) === 'P' ? 'piccolo' : 'lungo'} · costava ${dan(costBefore(p))}${change(p)}`, p.val));
   $('#best-sum').textContent = best.length ? `${best.reduce((s, p) => s + p.val, 0)} punti · ${dan(best.reduce((s, p) => s + costBefore(p), 0))} spesi` : '';
   $('#stats-msg').textContent = `Dati della ${prevDay}ª giornata.`;
   countUp(document.querySelectorAll('#tab-stats ol:not(#st-surprise, #st-flop) b'));
